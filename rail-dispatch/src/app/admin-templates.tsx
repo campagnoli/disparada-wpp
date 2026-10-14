@@ -50,7 +50,7 @@ const DADOS_SIMULACAO: DadosTemplateMensagem = {
   impacto: 'Circulação em via singela entre Luz e Tatuapé com maiores intervalos e velocidade reduzida.',
   acoes: 'Manutenção elétrica a caminho da composição, manobra de recolhimento para o pátio e apoio de segurança nas plataformas.',
   textoComunicacao: 'Atenção, passageiros da Linha 11-Coral: devido a uma ocorrência técnica em um trem na região da estação Luz, a circulação está sendo realizada com intervalos maiores entre as estações Luz e Tatuapé. Nossas equipes de manutenção já estão atuando para restabelecer a normalidade com segurança.',
-  informante: 'Gabriel Campagnoli (CCO)',
+  sco: 'Gabriel Campagnoli (CCO)',
   linha: 'Linha 11-Coral',
   via: 'Via 1',
   idTrem: 'C120',
@@ -78,7 +78,7 @@ const TAGS_DISPONIVEIS: Array<{
   { tag: '{{ACOES}}', desc: 'Ações imediatas do CCO e áreas acionadas', grupos: ['operacao', 'gerencia'] },
   { tag: '{{TEXTO_COMUNICACAO}}', desc: 'Texto narrativo gerado pela IA para passageiros', grupos: ['comunicacao'] },
   { tag: '{{LINHA}}', desc: 'Nome da linha operacional', grupos: ['comunicacao', 'operacao', 'gerencia'] },
-  { tag: '{{INFORMANTE}}', desc: 'Assinatura do despachante responsável', grupos: ['comunicacao', 'operacao', 'gerencia'] },
+  { tag: '{{SCO}}', desc: 'Assinatura do SCO (supervisor responsável)', grupos: ['comunicacao', 'operacao', 'gerencia'] },
 ];
 
 export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: AdminTemplatesProps) {

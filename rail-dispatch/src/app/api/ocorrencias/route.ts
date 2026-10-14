@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { incluirInformante, normalizarInformante } from '@/lib/mensagens';
+import { incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
 import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
 
@@ -94,11 +94,11 @@ export async function POST(request: Request) {
 	const falha = falhas.map((item) => item.descricao).join('; ');
 	const impacto = falhas.map((item) => item.impacto).join('\n');
 	const horaInicio = getText(body.horaInicio) || getText(body.hora_inicio);
-	const informante = normalizarInformante(body.informante);
+	const sco = normalizarSCO(body.sco ?? body.informante);
 	const mensagens = isRecord(body.mensagens) ? body.mensagens : body;
-	const comunicacao = incluirInformante(getText(mensagens.comunicacao) || getText(body.msg_comunicacao), informante);
-	const operacao = incluirInformante(getText(mensagens.operacao) || getText(body.msg_operacao), informante);
-	const gerencia = incluirInformante(getText(mensagens.gerencia) || getText(body.msg_gerencia), informante);
+	const comunicacao = incluirSCO(getText(mensagens.comunicacao) || getText(body.msg_comunicacao), sco);
+	const operacao = incluirSCO(getText(mensagens.operacao) || getText(body.msg_operacao), sco);
+	const gerencia = incluirSCO(getText(mensagens.gerencia) || getText(body.msg_gerencia), sco);
 
 	if (
 		!linha
@@ -113,7 +113,8 @@ export async function POST(request: Request) {
 		|| !falhas.length
 		|| falhas.length !== (Array.isArray(body.falhas) ? body.falhas.length : 0)
 		|| !horaInicio
-		|| !informante
+		|| !sco
+		|| sco.length > 150
 		|| !comunicacao
 		|| !operacao
 		|| !gerencia

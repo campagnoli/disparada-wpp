@@ -1,4 +1,4 @@
-import { incluirInformante } from '@/lib/mensagens';
+import { incluirSCO } from '@/lib/mensagens';
 
 export interface TemplatesMensagem {
   comunicacao: string;
@@ -51,6 +51,7 @@ export interface DadosTemplateMensagem {
   impacto?: string;
   acoes?: string;
   textoComunicacao?: string;
+  sco?: string;
   informante?: string;
   linha?: string;
   via?: string;
@@ -94,7 +95,7 @@ export function calcularDuracao(horaInicio?: string | null, horaFim?: string | n
 export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMensagem): string {
   let texto = template;
 
-  const informanteValor = dados.informante ? dados.informante.trim() : '';
+  const scoValor = dados.sco ?? dados.informante ?? '';
   const duracaoValor = dados.duracao || calcularDuracao(dados.horaInicio, dados.horaFim);
 
   // 1. Tag de ENCERRAMENTO (só aparece após encerrada)
@@ -172,13 +173,13 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
       .join('\n');
   }
 
-  if (texto.includes('{{INFORMANTE}}')) {
-    texto = texto.replaceAll(
-      '{{INFORMANTE}}',
-      informanteValor ? `Responsável: ${informanteValor}` : ''
-    );
-  } else if (informanteValor) {
-    texto = incluirInformante(texto, informanteValor);
+  if (texto.includes('{{SCO}}') || texto.includes('{{INFORMANTE}}')) {
+    const assinatura = scoValor ? `SCO: ${scoValor.trim()}` : '';
+    texto = texto
+      .replaceAll('{{SCO}}', assinatura)
+      .replaceAll('{{INFORMANTE}}', assinatura);
+  } else if (scoValor) {
+    texto = incluirSCO(texto, scoValor.trim());
   }
 
   texto = texto.replace(/\n{3,}/g, '\n\n').trim();

@@ -384,7 +384,8 @@ export default function DespachoOcorrencias() {
   const [prefixoViagem, setPrefixoViagem] = useState('');
   const [classificacoes, setClassificacoes] = useState<string[]>([]);
   const [tipoIN, setTipoIN] = useState('');
-  const [informante, setInformante] = useState('');
+  const [sco, setSCO] = useState('');
+  const [identificacaoComunicador, setIdentificacaoComunicador] = useState('');
 
   const estacaoSelecionadaObj = useMemo(() => {
     if (!localidadeInicio) return null;
@@ -406,16 +407,17 @@ export default function DespachoOcorrencias() {
     if (opcao === 'estacao') {
       setIdTrem('');
       setPrefixoViagem('');
-      const nomeEst = estacaoSelecionadaObj ? estacaoSelecionadaObj.nome : localidadeInicio;
-      setInformante(nomeEst ? `Estação ${nomeEst}` : 'Estação');
+      setIdentificacaoComunicador(
+        estacaoSelecionadaObj
+          ? `Estação ${estacaoSelecionadaObj.nome} (${estacaoSelecionadaObj.sigla})`
+          : localidadeInicio ? `Estação ${localidadeInicio}` : '',
+      );
     } else if (opcao === 'ouvidoria') {
       setIdTrem('');
       setPrefixoViagem('');
-      setInformante('Ouvidoria');
+      setIdentificacaoComunicador('Ouvidoria');
     } else if (opcao === 'trem') {
-      if (informante.startsWith('Estação') || informante === 'Ouvidoria') {
-        setInformante('');
-      }
+      setIdentificacaoComunicador('');
     }
   };
   const [falhasSelecionadas, setFalhasSelecionadas] = useState<FalhaSelecionada[]>([]);
@@ -492,7 +494,12 @@ export default function DespachoOcorrencias() {
         && !!localidadeInicio
         && (tipoLocalidade !== 'trecho' || (!!localidadeFim && localidadeFim !== localidadeInicio))
         && validacaoVias.valido
-        && !!informante.trim()
+        && !!sco.trim()
+        && (
+          tipoLocalidade !== 'estacao'
+          || quemComunicou === 'trem'
+          || !!identificacaoComunicador.trim()
+        )
         && !!horaInicio
       );
     }
@@ -956,10 +963,8 @@ export default function DespachoOcorrencias() {
 
       let tremEstacaoInforma = '';
       if (tipoLocalidade === 'estacao') {
-        if (quemComunicou === 'estacao') {
-          tremEstacaoInforma = estacaoNomeDisplay || (localidadeInicio ? `Estação ${localidadeInicio}` : 'Estação');
-        } else if (quemComunicou === 'ouvidoria') {
-          tremEstacaoInforma = 'Ouvidoria';
+        if (quemComunicou === 'estacao' || quemComunicou === 'ouvidoria') {
+          tremEstacaoInforma = identificacaoComunicador.trim();
         } else {
           const partes: string[] = [];
           if (idTrem.trim()) partes.push(`Trem ${idTrem.trim()}`);
@@ -1003,7 +1008,8 @@ export default function DespachoOcorrencias() {
         classificacoes,
         tipoIN,
         falhas: [{ descricao: falha, impacto }],
-        informante,
+        sco,
+        identificacaoComunicador,
         falha,
         horaInicio,
         impacto,
@@ -1148,7 +1154,7 @@ export default function DespachoOcorrencias() {
         classificacoes,
         tipoIN,
         falhas: [{ descricao: falha, impacto }],
-        informante,
+        sco,
         falha,
         horaInicio,
         impacto,
@@ -1650,12 +1656,10 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                             setQuemComunicou('estacao');
                             setIdTrem('');
                             setPrefixoViagem('');
-                            setInformante('');
+                            setIdentificacaoComunicador('');
                           } else {
                             setQuemComunicou('trem');
-                            if (informante.startsWith('Estação') || informante === 'Ouvidoria') {
-                              setInformante('');
-                            }
+                            setIdentificacaoComunicador('');
                           }
                         }
                       }}
@@ -1707,7 +1711,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                             setDetalheLocalizacao('');
                             setElementoAfetado('geral');
                             if (quemComunicou === 'estacao') {
-                              setInformante(`Estação ${est.nome}`);
+                              setIdentificacaoComunicador(`Estação ${est.nome} (${est.sigla})`);
                             }
                           }}
                         />
@@ -2424,22 +2428,34 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                     </div>
                   )}
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label htmlFor="informante" className="form-label block mb-0">Informante</label>
-                      {tipoLocalidade === 'estacao' && (quemComunicou === 'estacao' || quemComunicou === 'ouvidoria') && (
-                        <span className="text-[10px] font-semibold text-safira bg-safira/10 px-2 py-0.5 rounded border border-safira/20">
-                          Preenchido via {quemComunicou === 'estacao' ? 'Estação' : 'Ouvidoria'}
-                        </span>
-                      )}
+                  {tipoLocalidade === 'estacao' && quemComunicou !== 'trem' && (
+                    <div>
+                      <label htmlFor="identificacao-comunicador" className="form-label block">
+                        Nome da estação ou ouvidoria que comunicou
+                      </label>
+                      <input
+                        id="identificacao-comunicador"
+                        type="text"
+                        required
+                        placeholder="Ex: Estação Luz ou Ouvidoria"
+                        value={identificacaoComunicador}
+                        onChange={(e) => setIdentificacaoComunicador(e.target.value)}
+                        maxLength={150}
+                        className="w-full form-control"
+                      />
                     </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="sco" className="form-label block">SCO</label>
                     <input
-                      id="informante"
+                      id="sco"
                       type="text"
                       required
-                      placeholder="Ex: Triviano Souza ou Estação Luz"
-                      value={informante}
-                      onChange={(e) => setInformante(e.target.value)}
+                      placeholder="Nome do supervisor que assina a mensagem"
+                      value={sco}
+                      onChange={(e) => setSCO(e.target.value)}
+                      maxLength={150}
                       className="w-full form-control"
                     />
                   </div>

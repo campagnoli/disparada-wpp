@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { incluirInformante, normalizarInformante } from '@/lib/mensagens';
+import { incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isModeloGemini } from '@/lib/gemini-models';
 import { obterPromptSistemaAtivo, montarSystemInstruction } from '@/lib/gemini-prompt';
 import { obterTemplatesMensagemAtivos, aplicarTemplateMensagem } from '@/lib/mensagem-templates';
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     }
 
     const dados = body;
-    const informante = normalizarInformante(dados.informante);
+    const sco = normalizarSCO(dados.sco ?? dados.informante);
     const linha = typeof dados.linha === 'string' ? dados.linha : '';
     const via = typeof dados.via === 'string' ? dados.via : '';
     const elementoAfetado = typeof dados.elementoAfetado === 'string' ? dados.elementoAfetado.trim() : '';
@@ -83,6 +83,10 @@ export async function POST(req: Request) {
     const inSelecionada = classificacoes.includes('IN');
     const modelo = isModeloGemini(dados.modelo) ? dados.modelo : 'gemini-3.1-flash-lite';
     const tipoLocalidade = dados.tipoLocalidade;
+    const quemComunicou = typeof dados.quemComunicou === 'string' ? dados.quemComunicou.trim().toLowerCase() : '';
+    const identificacaoComunicador = typeof dados.identificacaoComunicador === 'string'
+      ? dados.identificacaoComunicador.trim().replace(/\s+/g, ' ')
+      : '';
     const localidadeInicio = typeof dados.localidadeInicio === 'string' ? dados.localidadeInicio.trim() : '';
     const localidadeFim = typeof dados.localidadeFim === 'string' ? dados.localidadeFim.trim() : '';
     const estrategiaLoop = dados.estrategiaLoop === true;
@@ -116,7 +120,14 @@ export async function POST(req: Request) {
       : [];
 
     if (
-      !informante
+      !sco
+      || sco.length > 150
+      || identificacaoComunicador.length > 150
+      || (
+        tipoLocalidade === 'estacao'
+        && (quemComunicou === 'estacao' || quemComunicou === 'ouvidoria')
+        && !identificacaoComunicador
+      )
       || !linha
       || idTrem.length > 100
       || prefixoViagem.length > 100
@@ -137,10 +148,15 @@ export async function POST(req: Request) {
     const dataAtual = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
     // Determina identificações de reporte e quem comunicou a ocorrência
-    const quemComunicou = typeof dados.quemComunicou === 'string' ? dados.quemComunicou.trim().toLowerCase() : '';
     let tremEstacaoInforma = '';
 
-    if (typeof dados.tremEstacaoInforma === 'string' && dados.tremEstacaoInforma.trim()) {
+    if (
+      tipoLocalidade === 'estacao'
+      && (quemComunicou === 'estacao' || quemComunicou === 'ouvidoria')
+      && identificacaoComunicador
+    ) {
+      tremEstacaoInforma = identificacaoComunicador;
+    } else if (typeof dados.tremEstacaoInforma === 'string' && dados.tremEstacaoInforma.trim()) {
       tremEstacaoInforma = dados.tremEstacaoInforma.trim();
     } else if (quemComunicou === 'ouvidoria') {
       tremEstacaoInforma = 'Ouvidoria';
@@ -452,7 +468,7 @@ export async function POST(req: Request) {
         falha: operacaoData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: operacaoData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
         acoes: operacaoData.acoes,
-        informante,
+        sco,
         linha,
         via,
         idTrem,
@@ -460,7 +476,7 @@ export async function POST(req: Request) {
         localidade,
       });
     } else if (typeof payload.operacao === 'string') {
-      msgOperacao = incluirInformante(payload.operacao, informante);
+      msgOperacao = incluirSCO(payload.operacao, sco);
     } else {
       throw new Error('O Gemini retornou formato inválido para a mensagem de operação.');
     }
@@ -479,7 +495,7 @@ export async function POST(req: Request) {
         falha: gerenciaData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: gerenciaData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
         acoes: gerenciaData.acoes,
-        informante,
+        sco,
         linha,
         via,
         idTrem,
@@ -487,7 +503,7 @@ export async function POST(req: Request) {
         localidade,
       });
     } else if (typeof payload.gerencia === 'string') {
-      msgGerencia = incluirInformante(payload.gerencia, informante);
+      msgGerencia = incluirSCO(payload.gerencia, sco);
     } else {
       throw new Error('O Gemini retornou formato inválido para a mensagem de gerência.');
     }
@@ -505,7 +521,7 @@ export async function POST(req: Request) {
       impacto: typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : '',
       acoes: '',
       textoComunicacao: textoComunicacaoBruto,
-      informante,
+      sco,
       linha,
       via,
       idTrem,
