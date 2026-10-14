@@ -11,6 +11,9 @@ rail-dispatch/
 ├── src/
 │   ├── app/
 │   │   ├── api/
+│   │   │   ├── auth/
+│   │   │   │   ├── login/route.ts         # Login operacional e criação da sessão
+│   │   │   │   └── logout/route.ts        # Encerramento da sessão operacional
 │   │   │   ├── admin/
 │   │   │   │   ├── falhas/route.ts      # CRUD e importação de falhas predefinidas
 │   │   │   │   ├── prompt/route.ts      # Gestão dinâmica do prompt do Gemini
@@ -27,7 +30,9 @@ rail-dispatch/
 │   │   ├── admin-whatsapp.tsx           # Painel de instâncias, grupos e anti-bloqueio WPP
 │   │   ├── globals.css                  # Design System (paleta institucional: Safira, Coral, Jade)
 │   │   ├── layout.tsx                   # Layout raiz com fontes e metadados
+│   │   ├── login/page.tsx               # Acesso operacional por senha única
 │   │   └── page.tsx                     # Formulário principal, visualização, disparo e histórico
+│   ├── proxy.ts                         # Proteção global por sessão operacional (Next.js 16)
 │   ├── config/
 │   │   ├── prompt-gemini.json           # Template base do prompt de sistema do Gemini
 │   │   └── templates-mensagem.json      # Modelos padrão dos 3 canais de mensagens CCO
@@ -72,6 +77,10 @@ cp .env.example .env.local
 ```
 
 Consulte o [README raiz](../README.md) para a lista e descrição completa das variáveis e a ordem das migrações do Supabase.
+
+Defina `APP_ACCESS_PASSWORD` no `.env.local` para desenvolvimento e nas Environment Variables
+da Vercel para produção. Essa senha protege a aplicação inteira; após o login, a sessão expira
+em 12 horas. Não exponha essa variável usando o prefixo `NEXT_PUBLIC_`.
 
 ---
 
