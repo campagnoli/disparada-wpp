@@ -72,6 +72,10 @@ interface FalhaSelecionada {
   impacto: string;
 }
 
+function normalizarBusca(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 export type ElementoAfetado =
   | 'via'
   | 'plataforma'
@@ -421,6 +425,7 @@ export default function DespachoOcorrencias() {
     }
   };
   const [falhasSelecionadas, setFalhasSelecionadas] = useState<FalhaSelecionada[]>([]);
+  const [buscaFalhas, setBuscaFalhas] = useState('');
   const [falhaEditada, setFalhaEditada] = useState<string | null>(null);
   const [impactoEditado, setImpactoEditado] = useState<string | null>(null);
   const [falhasPredefinidas, setFalhasPredefinidas] = useState<FalhaPredefinida[]>([]);
@@ -624,6 +629,12 @@ export default function DespachoOcorrencias() {
     ?? falhasSelecionadas.map((item) => item.descricao.trim()).filter(Boolean).join('\n');
   const impacto = impactoEditado
     ?? falhasSelecionadas.map((item) => item.impacto.trim()).filter(Boolean).join('\n');
+  const falhasFiltradas = useMemo(() => {
+    const termo = normalizarBusca(buscaFalhas);
+    return termo
+      ? falhasPredefinidas.filter((opcao) => normalizarBusca(opcao.descricao).includes(termo))
+      : falhasPredefinidas;
+  }, [buscaFalhas, falhasPredefinidas]);
 
   const atrasoComunicacao = (() => {
     if (!horaInicio || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaInicio)) return false;
@@ -2612,32 +2623,55 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                           </span>
                           <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
                         </summary>
-                        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-3 shadow-lg">
-                          <div className="space-y-2">
-                            {falhasPredefinidas.map((opcao) => {
-                              const chave = `preset:${opcao.id}`;
-                              const selecionada = falhasSelecionadas.some((item) => item.chave === chave);
-                              return (
-                                <label key={opcao.id} className="flex cursor-pointer items-start gap-2 py-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={selecionada}
-                                    onChange={(event) => alternarFalha(opcao, event.target.checked)}
-                                    className="mt-1"
-                                  />
-                                  <span>{opcao.descricao}</span>
-                                </label>
-                              );
-                            })}
-                            <label className="flex cursor-pointer items-start gap-2 border-t border-slate-200 pt-2">
+                        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                          <div className="border-b border-slate-100 bg-slate-50/70 p-2.5">
+                            <div className="relative flex items-center">
+                              <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
                               <input
-                                type="checkbox"
-                                checked={falhasSelecionadas.some((item) => item.chave === 'personalizada')}
-                                onChange={(event) => alternarFalha(null, event.target.checked)}
-                                className="mt-1"
+                                type="search"
+                                value={buscaFalhas}
+                                onChange={(event) => setBuscaFalhas(event.target.value)}
+                                placeholder="Digite para pesquisar falhas..."
+                                aria-label="Pesquisar falhas"
+                                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs outline-none transition-all placeholder:text-slate-400 focus:border-safira focus:ring-1 focus:ring-safira"
                               />
-                              <span>Outra / descrever</span>
-                            </label>
+                            </div>
+                            <p className="mt-1.5 px-0.5 text-[11px] text-slate-400">
+                              {falhasFiltradas.length} {falhasFiltradas.length === 1 ? 'falha encontrada' : 'falhas encontradas'}
+                            </p>
+                          </div>
+                          <div className="max-h-52 overflow-y-auto p-3">
+                            <div className="space-y-2">
+                              {falhasFiltradas.map((opcao) => {
+                                const chave = `preset:${opcao.id}`;
+                                const selecionada = falhasSelecionadas.some((item) => item.chave === chave);
+                                return (
+                                  <label key={opcao.id} className="flex cursor-pointer items-start gap-2 py-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={selecionada}
+                                      onChange={(event) => alternarFalha(opcao, event.target.checked)}
+                                      className="mt-1"
+                                    />
+                                    <span>{opcao.descricao}</span>
+                                  </label>
+                                );
+                              })}
+                              {falhasFiltradas.length === 0 && (
+                                <p className="py-3 text-center text-xs text-slate-500">
+                                  Nenhuma falha encontrada.
+                                </p>
+                              )}
+                              <label className="flex cursor-pointer items-start gap-2 border-t border-slate-200 pt-2">
+                                <input
+                                  type="checkbox"
+                                  checked={falhasSelecionadas.some((item) => item.chave === 'personalizada')}
+                                  onChange={(event) => alternarFalha(null, event.target.checked)}
+                                  className="mt-1"
+                                />
+                                <span>Outra / descrever</span>
+                              </label>
+                            </div>
                           </div>
                         </div>
                       </details>
