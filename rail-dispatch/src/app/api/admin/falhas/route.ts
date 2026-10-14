@@ -40,6 +40,99 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
   }
 
+  // Suporte a importação em lote (ex: via CSV)
+  if (typeof body === 'object' && body !== null && 'lote' in body && Array.isArray((body as { lote: unknown }).lote)) {
+    const rawLote = (body as { lote: unknown[] }).lote;
+    if (rawLote.length === 0) {
+      return NextResponse.json({ error: 'Nenhum item informado para importação.' }, { status: 400 });
+    }
+    if (rawLote.length > 500) {
+      return NextResponse.json({ error: 'Limite de 500 itens por importação excedido.' }, { status: 400 });
+    }
+
+    const loteValido: { descricao: string; impacto: string }[] = [];
+    for (let i = 0; i < rawLote.length; i++) {
+      const item = rawLote[i];
+      if (
+        typeof item !== 'object'
+        || item === null
+        || !('descricao' in item)
+        || typeof (item as { descricao: unknown }).descricao !== 'string'
+        || !('impacto' in item)
+        || typeof (item as { impacto: unknown }).impacto !== 'string'
+      ) {
+        return NextResponse.json({ error: `Item ${i + 1} com formato inválido.` }, { status: 400 });
+      }
+
+      const descricao = (item as { descricao: string }).descricao.trim().replace(/\s+/g, ' ');
+      const impacto = (item as { impacto: string }).impacto.trim().replace(/\s+/g, ' ');
+
+      if (!descricao || descricao.length > 120 || !impacto || impacto.length > 500) {
+        return NextResponse.json(
+          { error: `Item ${i + 1} ("${descricao.slice(0, 30)}"): a falha deve ter até 120 caracteres e o impacto de 1 a 500 caracteres.` },
+          { status: 400 }
+        );
+      }
+      loteValido.push({ descricao, impacto });
+    }
+
+    try {
+      const supabase = createSupabaseAdminClient();
+      const { data: ultimaFalha, error: buscaError } = await supabase
+        .from('falhas_predefinidas')
+        .select('ordem')
+        .order('ordem', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (buscaError) throw buscaError;
+
+      const { data: existentes, error: existentesError } = await supabase
+        .from('falhas_predefinidas')
+        .select('descricao');
+
+      if (existentesError) throw existentesError;
+
+      const existentesSet = new Set((existentes ?? []).map((f) => f.descricao.toLowerCase().trim()));
+      let ordemAtual = ultimaFalha?.ordem ?? 0;
+      const novasParaInserir: { descricao: string; impacto: string; ordem: number }[] = [];
+      let ignoradas = 0;
+
+      for (const item of loteValido) {
+        const chave = item.descricao.toLowerCase().trim();
+        if (existentesSet.has(chave)) {
+          ignoradas++;
+        } else {
+          existentesSet.add(chave);
+          ordemAtual += 1;
+          novasParaInserir.push({
+            descricao: item.descricao,
+            impacto: item.impacto,
+            ordem: ordemAtual,
+          });
+        }
+      }
+
+      if (novasParaInserir.length > 0) {
+        const { error: insertError } = await supabase
+          .from('falhas_predefinidas')
+          .insert(novasParaInserir);
+
+        if (insertError) throw insertError;
+      }
+
+      return NextResponse.json({
+        sucesso: true,
+        inseridas: novasParaInserir.length,
+        ignoradas,
+        total: loteValido.length,
+      }, { status: 201 });
+    } catch (error: unknown) {
+      console.error('Falha ao importar lote de falhas:', error);
+      return NextResponse.json({ error: 'Não foi possível importar o lote de falhas.' }, { status: 500 });
+    }
+  }
+
   if (
     typeof body !== 'object'
     || body === null

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { incluirInformante, normalizarInformante } from '@/lib/mensagens';
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
+import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -64,8 +65,9 @@ export async function POST(request: Request) {
 	}
 
 	const linha = getText(body.linha);
-	const via = getText(body.via);
 	const tipoLocalidade = getText(body.tipoLocalidade);
+	const viaInformada = getText(body.via);
+	const via = viaInformada || (tipoLocalidade === 'estacao' ? 'Não aplicável' : '');
 	const localidadeInicio = getText(body.localidadeInicio);
 	const localidadeFim = getText(body.localidadeFim);
 	const idTrem = getText(body.idTrem);
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
 
 	if (
 		!linha
-		|| !via
+		|| (tipoLocalidade === 'trecho' && !viaInformada)
 		|| !localidade
 		|| (tipoLocalidade === 'trecho' && localidadeInicio === localidadeFim)
 		|| idTrem.length > 100
@@ -117,7 +119,7 @@ export async function POST(request: Request) {
 		|| !gerencia
 	) {
 		return NextResponse.json(
-			{ error: 'Preencha os dados obrigatórios, gere as três mensagens e confira as classificações selecionadas. Se IN estiver selecionada, informe o tipo de A a E.' },
+			{ error: 'Preencha os dados obrigatórios (incluindo via obrigatória para trechos entre estações), gere as três mensagens e confira as classificações selecionadas.' },
 			{ status: 400 }
 		);
 	}
@@ -167,14 +169,18 @@ export async function PATCH(request: Request) {
 	const codigoEvento = getText(body.codigo_evento).toUpperCase();
 	const horaFim = getText(body.hora_fim);
 
-	if (!codigoEvento || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim)) {
-		return NextResponse.json({ error: 'Informe um ID e um horário fim válido.' }, { status: 400 });
+	if (!codigoEvento) {
+		return NextResponse.json({ error: 'Informe o ID do evento.' }, { status: 400 });
+	}
+
+	if (horaFim && !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim)) {
+		return NextResponse.json({ error: 'Informe um horário fim válido no formato HH:MM.' }, { status: 400 });
 	}
 
 	try {
 		const { data: atual, error: buscaError } = await supabase
 			.from('ocorrencias')
-			.select('msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('hora_inicio, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -185,26 +191,40 @@ export async function PATCH(request: Request) {
 
 		if (!atual) return NextResponse.json({ error: 'Nenhuma ocorrência encontrada para esse ID.' }, { status: 404 });
 
-		const incluirHoraFim = (mensagem: string) => {
-			const mensagemBase = mensagem.replace(/(?:\r?\n)?\*Horário fim:\*.*$/m, '').trimEnd();
-			return `${mensagemBase}\n*Horário fim:* ${horaFim}`;
+		const textoComunicacao = getText(body.msg_comunicacao) || atual.msg_comunicacao;
+		const textoOperacao = getText(body.msg_operacao) || atual.msg_operacao;
+		const textoGerencia = getText(body.msg_gerencia) || atual.msg_gerencia;
+
+		const msgComunicacao = horaFim
+			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio)
+			: textoComunicacao;
+		const msgOperacao = horaFim
+			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio)
+			: textoOperacao;
+		const msgGerencia = horaFim
+			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio)
+			: textoGerencia;
+
+		const updatePayload: Record<string, unknown> = {
+			msg_comunicacao: msgComunicacao,
+			msg_operacao: msgOperacao,
+			msg_gerencia: msgGerencia,
 		};
+
+		if (horaFim) {
+			updatePayload.hora_fim = horaFim;
+			updatePayload.status = 'encerrada';
+		}
 
 		const { data, error } = await supabase
 			.from('ocorrencias')
-			.update({
-				hora_fim: horaFim,
-				status: 'encerrada',
-				msg_comunicacao: incluirHoraFim(atual.msg_comunicacao),
-				msg_operacao: incluirHoraFim(atual.msg_operacao),
-				msg_gerencia: incluirHoraFim(atual.msg_gerencia),
-			})
+			.update(updatePayload)
 			.eq('codigo_evento', codigoEvento)
 			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
 			.single();
 
 		if (error) {
-			console.error('Falha ao atualizar horário fim da ocorrência:', error.message);
+			console.error('Falha ao atualizar ocorrência no Supabase:', error.message);
 			return NextResponse.json({ error: 'Não foi possível atualizar a ocorrência.' }, { status: 500 });
 		}
 
