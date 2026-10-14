@@ -2132,6 +2132,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                             desabilitado={carregandoEstacoes || estacoes.length === 0}
                             carregando={carregandoEstacoes}
                             obrigatorio
+                            visualCompacto
                             alinhamento="esquerda"
                             aoMudar={(val, est) => {
                               if (!val || !est) {
@@ -2166,6 +2167,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                             desabilitado={!localidadeInicio || carregandoEstacoes}
                             carregando={carregandoEstacoes}
                             obrigatorio
+                            visualCompacto
                             alinhamento="direita"
                             mostrarBadgeLinha={false}
                             aoMudar={(val) => {
