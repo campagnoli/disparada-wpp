@@ -424,6 +424,29 @@ export default function DespachoOcorrencias() {
       setIdentificacaoComunicador('');
     }
   };
+  const alterarTipoLocalidade = (novoTipo: 'estacao' | 'trecho') => {
+    if (novoTipo === tipoLocalidade) return;
+
+    setTipoLocalidade(novoTipo);
+    setLocalidadeInicio('');
+    setLocalidadeFim('');
+    setViasSelecionadas([]);
+    setViasDisponiveis([]);
+    setPlataformasSelecionadas([]);
+    setPlataformasDisponiveis([]);
+    setDetalheLocalizacao('');
+    setElementoAfetado('geral');
+    setErroVias('');
+    if (novoTipo === 'estacao') {
+      setQuemComunicou('estacao');
+      setIdTrem('');
+      setPrefixoViagem('');
+      setIdentificacaoComunicador('');
+    } else {
+      setQuemComunicou('trem');
+      setIdentificacaoComunicador('');
+    }
+  };
   const [falhasSelecionadas, setFalhasSelecionadas] = useState<FalhaSelecionada[]>([]);
   const [buscaFalhas, setBuscaFalhas] = useState('');
   const [falhaEditada, setFalhaEditada] = useState<string | null>(null);
@@ -1646,39 +1669,45 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                 <div className="space-y-4">
                   {/* Seleção de Área Afetada (Linha é auto-inferida a partir da Estação selecionada) */}
                   <div>
-                    <label htmlFor="tipo-localidade" className="form-label block">Área afetada</label>
-                    <select
-                      id="tipo-localidade"
-                      value={tipoLocalidade}
-                      onChange={(e) => {
-                        if (e.target.value === 'estacao' || e.target.value === 'trecho') {
-                          const novoTipo = e.target.value;
-                          setTipoLocalidade(novoTipo);
-                          setLocalidadeInicio('');
-                          setLocalidadeFim('');
-                          setViasSelecionadas([]);
-                          setViasDisponiveis([]);
-                          setPlataformasSelecionadas([]);
-                          setPlataformasDisponiveis([]);
-                          setDetalheLocalizacao('');
-                          setElementoAfetado('geral');
-                          setErroVias('');
-                          if (novoTipo === 'estacao') {
-                            setQuemComunicou('estacao');
-                            setIdTrem('');
-                            setPrefixoViagem('');
-                            setIdentificacaoComunicador('');
-                          } else {
-                            setQuemComunicou('trem');
-                            setIdentificacaoComunicador('');
-                          }
-                        }
-                      }}
-                      className="w-full form-select"
-                    >
-                      <option value="estacao">Estação</option>
-                      <option value="trecho">Trecho entre estações</option>
-                    </select>
+                    <span id="tipo-localidade-label" className="form-label block">Área afetada</span>
+                    <details className="group relative">
+                      <summary
+                        aria-labelledby="tipo-localidade-label"
+                        className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                      >
+                        <span>
+                          {tipoLocalidade === 'estacao' ? 'Estação' : 'Trecho entre estações'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+                      </summary>
+                      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                        {[
+                          { valor: 'estacao' as const, rotulo: 'Estação' },
+                          { valor: 'trecho' as const, rotulo: 'Trecho entre estações' },
+                        ].map((opcao) => {
+                          const selecionada = tipoLocalidade === opcao.valor;
+                          return (
+                            <button
+                              key={opcao.valor}
+                              type="button"
+                              aria-pressed={selecionada}
+                              onClick={(event) => {
+                                alterarTipoLocalidade(opcao.valor);
+                                event.currentTarget.closest('details')?.removeAttribute('open');
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                                selecionada
+                                  ? 'bg-safira/10 font-semibold text-safira'
+                                  : 'text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              {opcao.rotulo}
+                              {selecionada && <Check className="h-4 w-4 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
                   </div>
 
                   {tipoLocalidade === 'estacao' ? (
@@ -1701,6 +1730,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                           desabilitado={carregandoEstacoes || estacoes.length === 0}
                           carregando={carregandoEstacoes}
                           obrigatorio
+                          visualCompacto
                           aoMudar={(val, est) => {
                             if (!val || !est) {
                               setLocalidadeInicio('');

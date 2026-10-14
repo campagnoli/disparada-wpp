@@ -26,6 +26,7 @@ export interface SeletorEstacaoProps {
   obrigatorio?: boolean;
   alinhamento?: 'esquerda' | 'direita' | 'auto';
   mostrarBadgeLinha?: boolean;
+  visualCompacto?: boolean;
   className?: string;
 }
 
@@ -82,6 +83,7 @@ export function SeletorEstacao({
   obrigatorio = false,
   alinhamento = 'auto',
   mostrarBadgeLinha = true,
+  visualCompacto = false,
   className = '',
 }: SeletorEstacaoProps) {
   const generatedId = useId();
@@ -340,7 +342,9 @@ export function SeletorEstacao({
       {/* Menu Flutuante / Popover de Pesquisa */}
       {aberto && (
         <div
-          className={`absolute top-full mt-1.5 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden ${classesAlinhamento}`}
+          className={`absolute top-full mt-1.5 z-50 bg-white border border-slate-200 overflow-hidden ${
+            visualCompacto ? 'rounded-md shadow-lg' : 'rounded-xl shadow-2xl'
+          } ${classesAlinhamento}`}
         >
           {/* Campo de Digitação Direta / Busca em Tempo Real */}
           <div className="p-2.5 border-b border-slate-100 bg-slate-50/70">
@@ -384,7 +388,7 @@ export function SeletorEstacao({
             ref={listaRef}
             id={`${inputId}-listbox`}
             role="listbox"
-            className="max-h-64 overflow-y-auto p-1.5 space-y-0.5 text-xs select-none focus:outline-none"
+            className={`${visualCompacto ? 'max-h-52 p-1' : 'max-h-64 p-1.5'} overflow-y-auto space-y-0.5 text-xs select-none focus:outline-none`}
           >
             {estacoesFiltradas.length === 0 ? (
               <li className="p-4 text-center text-slate-500 space-y-1">
