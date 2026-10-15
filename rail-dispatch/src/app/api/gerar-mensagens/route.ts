@@ -5,6 +5,7 @@ import { incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isModeloGemini } from '@/lib/gemini-models';
 import { obterPromptSistemaAtivo, montarSystemInstruction } from '@/lib/gemini-prompt';
 import { obterTemplatesMensagemAtivos, aplicarTemplateMensagem } from '@/lib/mensagem-templates';
+import { aplicarRotulosCondicionaisMensagem } from '@/lib/mensagem-templates-pure';
 import {
   formatarClassificacoes,
   isClassificacaoOcorrencia,
@@ -22,6 +23,10 @@ function getErrorStatus(error: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isModalidadePaese(value: unknown): value is 'SPTrans' | 'ARTESP' | 'Trilhos' {
+  return typeof value === 'string' && ['SPTrans', 'ARTESP', 'Trilhos'].some((item) => item === value);
 }
 
 function extrairDadosSecao(valor: unknown): { titulo: string; falha: string; impacto: string; acoes: string } | null {
@@ -81,6 +86,17 @@ export async function POST(req: Request) {
       && new Set(classificacoes).size === classificacoes.length;
     const tipoIN = typeof dados.tipoIN === 'string' ? dados.tipoIN.trim() : '';
     const inSelecionada = classificacoes.includes('IN');
+    const paeseAcionadoRecebido = dados.paeseAcionado;
+    const paeseAcionado = paeseAcionadoRecebido === true;
+    const paeseModalidadesRecebidas = Array.isArray(dados.paeseModalidades) ? dados.paeseModalidades : [];
+    const paeseModalidades = paeseAcionado
+      ? paeseModalidadesRecebidas.filter(isModalidadePaese)
+      : [];
+    const paeseModalidadesValidas = paeseModalidades.length === paeseModalidadesRecebidas.length
+      && new Set(paeseModalidades).size === paeseModalidades.length;
+    const paeseTrecho = paeseAcionado && typeof dados.paeseTrecho === 'string'
+      ? dados.paeseTrecho.trim().replace(/\s+/g, ' ')
+      : '';
     const modelo = isModeloGemini(dados.modelo) ? dados.modelo : 'gemini-3.1-flash-lite';
     const tipoLocalidade = dados.tipoLocalidade;
     const quemComunicou = typeof dados.quemComunicou === 'string' ? dados.quemComunicou.trim().toLowerCase() : '';
@@ -118,6 +134,17 @@ export async function POST(req: Request) {
           : [];
       })
       : [];
+
+    if (
+      (paeseAcionadoRecebido !== undefined && typeof paeseAcionadoRecebido !== 'boolean')
+      || !paeseModalidadesValidas
+      || (paeseAcionado && (!paeseModalidades.length || !paeseTrecho || paeseTrecho.length > 200))
+    ) {
+      return NextResponse.json(
+        { error: 'Se houver acionamento de PAESE, selecione um ou mais tipos válidos e informe o trecho atendido (até 200 caracteres).' },
+        { status: 400 }
+      );
+    }
 
     if (
       !sco
@@ -210,6 +237,9 @@ export async function POST(req: Request) {
     dadosOcorrencia.prefixoViagem = prefixoViagem;
     dadosOcorrencia.classificacoes = classificacoes;
     dadosOcorrencia.tipoIN = inSelecionada ? tipoIN : null;
+    dadosOcorrencia.paeseAcionado = paeseAcionado;
+    dadosOcorrencia.paeseModalidades = paeseModalidades;
+    dadosOcorrencia.paeseTrecho = paeseTrecho;
     dadosOcorrencia.falha = falhas.map((item) => item.descricao).join('; ');
     dadosOcorrencia.impacto = falhas.map((item) => item.impacto).join('\n');
     dadosOcorrencia.elementoAfetado = elementoAfetado || undefined;
@@ -221,6 +251,14 @@ export async function POST(req: Request) {
     dadosOcorrencia.trechoEstacaoAfetados = trechoEstacaoAfetados;
     dadosOcorrencia.estrategiaLoop = estrategiaLoop;
     dadosOcorrencia.resumoLoops = resumoLoops;
+    const rotuloInformante = quemComunicou === 'trem'
+      ? 'Trem que informa'
+      : quemComunicou === 'estacao'
+        ? 'Estação que informa'
+        : '';
+    const rotuloLocalidadeAfetada = tipoLocalidade === 'trecho'
+      ? 'Trecho afetado'
+      : 'Estação afetada';
 
     // 1. Obter dicionário de estações e siglas da linha informada
     const { data: estacoes, error: dbError } = await supabase
@@ -339,6 +377,7 @@ export async function POST(req: Request) {
       detalheLocalizacao,
       quemComunicou: quemComunicou || undefined,
       tremEstacaoInforma,
+      paeseAcionado,
     });
 
     const generationOptions = {
@@ -461,7 +500,9 @@ export async function POST(req: Request) {
         titulo: operacaoData.titulo || `DESPACHO CCO - ${linha.toUpperCase()}`,
         data: dataAtual,
         horaInicio: horaInicio || 'Não informada',
+        rotuloInformante,
         tremEstacaoInforma,
+        rotuloLocalidadeAfetada,
         trechoEstacaoAfetados,
         resumoLoops: estrategiaLoop && resumoLoops ? resumoLoops : undefined,
         classificacao: classificacaoFormatada || undefined,
@@ -476,7 +517,12 @@ export async function POST(req: Request) {
         localidade,
       });
     } else if (typeof payload.operacao === 'string') {
-      msgOperacao = incluirSCO(payload.operacao, sco);
+      msgOperacao = aplicarRotulosCondicionaisMensagem(incluirSCO(payload.operacao, sco), {
+        rotuloInformante,
+        tremEstacaoInforma,
+        rotuloLocalidadeAfetada,
+        trechoEstacaoAfetados,
+      });
     } else {
       throw new Error('O Gemini retornou formato inválido para a mensagem de operação.');
     }
@@ -488,7 +534,9 @@ export async function POST(req: Request) {
         titulo: gerenciaData.titulo || `INFORME EXECUTIVO CCO - ${linha.toUpperCase()}`,
         data: dataAtual,
         horaInicio: horaInicio || 'Não informada',
+        rotuloInformante,
         tremEstacaoInforma,
+        rotuloLocalidadeAfetada,
         trechoEstacaoAfetados,
         resumoLoops: estrategiaLoop && resumoLoops ? resumoLoops : undefined,
         classificacao: classificacaoFormatada || undefined,
@@ -503,7 +551,12 @@ export async function POST(req: Request) {
         localidade,
       });
     } else if (typeof payload.gerencia === 'string') {
-      msgGerencia = incluirSCO(payload.gerencia, sco);
+      msgGerencia = aplicarRotulosCondicionaisMensagem(incluirSCO(payload.gerencia, sco), {
+        rotuloInformante,
+        tremEstacaoInforma,
+        rotuloLocalidadeAfetada,
+        trechoEstacaoAfetados,
+      });
     } else {
       throw new Error('O Gemini retornou formato inválido para a mensagem de gerência.');
     }
@@ -513,7 +566,9 @@ export async function POST(req: Request) {
       titulo: `INFORME CCO - ${linha.toUpperCase()}`,
       data: dataAtual,
       horaInicio: horaInicio || 'Não informada',
+      rotuloInformante,
       tremEstacaoInforma,
+      rotuloLocalidadeAfetada,
       trechoEstacaoAfetados,
       resumoLoops: estrategiaLoop && resumoLoops ? resumoLoops : undefined,
       classificacao: classificacaoFormatada || undefined,
@@ -529,10 +584,16 @@ export async function POST(req: Request) {
       localidade,
     });
 
+    const informacaoPaese = paeseAcionado
+      ? `*Acionamento PAESE:* ${paeseModalidades.map((modalidade) => `PAESE ${modalidade}`).join(' e ')} — Trecho: ${paeseTrecho}`
+      : '';
+    const incluirInformacaoPaese = (mensagem: string) =>
+      informacaoPaese ? `${mensagem.trim()}\n\n${informacaoPaese}` : mensagem;
+
     return NextResponse.json({
-      comunicacao: msgComunicacao,
-      operacao: msgOperacao,
-      gerencia: msgGerencia,
+      comunicacao: incluirInformacaoPaese(msgComunicacao),
+      operacao: incluirInformacaoPaese(msgOperacao),
+      gerencia: incluirInformacaoPaese(msgGerencia),
     });
   } catch (error: unknown) {
     console.error('--- ERRO DETALHADO DO GEMINI ---');

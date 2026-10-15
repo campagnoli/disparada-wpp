@@ -15,8 +15,8 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
 *Duração:* {{DURACAO}}
-*Trem que informa/Estação que informa:* {{TREM_ESTACAO_INFORMA}}
-*Trecho/Estação afetados:* {{TRECHO_ESTACAO_AFETADOS}}
+*{{ROTULO_INFORMANTE}}:* {{TREM_ESTACAO_INFORMA}}
+*{{ROTULO_LOCALIDADE_AFETADA}}:* {{TRECHO_ESTACAO_AFETADOS}}
 *Estratégia de circulação:* {{RESUMO_LOOPS}}
 *Classificação da ocorrência:* {{CLASSIFICACAO}}
 *Falha:* {{FALHA}}
@@ -27,8 +27,8 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
 *Duração:* {{DURACAO}}
-*Trem que informa/Estação que informa:* {{TREM_ESTACAO_INFORMA}}
-*Trecho/Estação afetados:* {{TRECHO_ESTACAO_AFETADOS}}
+*{{ROTULO_INFORMANTE}}:* {{TREM_ESTACAO_INFORMA}}
+*{{ROTULO_LOCALIDADE_AFETADA}}:* {{TRECHO_ESTACAO_AFETADOS}}
 *Estratégia de circulação:* {{RESUMO_LOOPS}}
 *Classificação da ocorrência:* {{CLASSIFICACAO}}
 *Falha:* {{FALHA}}
@@ -43,7 +43,9 @@ export interface DadosTemplateMensagem {
   horaFim?: string;
   duracao?: string;
   isEncerramento?: boolean;
+  rotuloInformante?: string;
   tremEstacaoInforma?: string;
+  rotuloLocalidadeAfetada?: string;
   trechoEstacaoAfetados?: string;
   resumoLoops?: string;
   classificacao?: string;
@@ -87,13 +89,56 @@ export function calcularDuracao(horaInicio?: string | null, horaFim?: string | n
   return `${horas}h ${minutos}min`;
 }
 
+export function aplicarRotulosCondicionaisMensagem(
+  mensagem: string,
+  dados: Pick<
+    DadosTemplateMensagem,
+    'rotuloInformante' | 'tremEstacaoInforma' | 'rotuloLocalidadeAfetada' | 'trechoEstacaoAfetados'
+  >
+): string {
+  const campos = [
+    {
+      rotuloTag: '{{ROTULO_INFORMANTE}}',
+      valorTag: '{{TREM_ESTACAO_INFORMA}}',
+      rotulo: dados.rotuloInformante,
+      valor: dados.tremEstacaoInforma,
+      rotuloAntigo: /\*?\s*(?:Trem que informa\s*\/\s*Estação que informa|Estação que informa\s*\/\s*Trem que informa|Trem que informa|Estação que informa)\s*:?\s*\*?/i,
+    },
+    {
+      rotuloTag: '{{ROTULO_LOCALIDADE_AFETADA}}',
+      valorTag: '{{TRECHO_ESTACAO_AFETADOS}}',
+      rotulo: dados.rotuloLocalidadeAfetada,
+      valor: dados.trechoEstacaoAfetados,
+      rotuloAntigo: /\*?\s*(?:Trecho\s*\/\s*Estação\s+afetados|Trecho\s+afetado|Estação\s+afetada)\s*:?\s*\*?/i,
+    },
+  ];
+
+  return mensagem
+    .split('\n')
+    .flatMap((linha) => {
+      const campo = campos.find(({ rotuloTag, rotuloAntigo }) =>
+        linha.includes(rotuloTag) || rotuloAntigo.test(linha)
+      );
+      if (!campo) return [linha];
+      if (!campo.rotulo?.trim() || !campo.valor?.trim()) return [];
+
+      return [
+        linha
+          .replaceAll(campo.rotuloTag, campo.rotulo.trim())
+          .replaceAll(campo.valorTag, campo.valor.trim())
+          .replace(campo.rotuloAntigo, `*${campo.rotulo.trim()}:*`),
+      ];
+    })
+    .join('\n');
+}
+
 /**
  * Preenche o template com os dados da ocorrência e remove linhas condicionais vazias.
  * - HORA_FIM e DURACAO só aparecem quando informadas (após encerramento).
  * - Quando isEncerramento for true, adiciona *ENCERRAMENTO* em negrito acima do título.
  */
 export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMensagem): string {
-  let texto = template;
+  let texto = aplicarRotulosCondicionaisMensagem(template, dados);
 
   const scoValor = dados.sco ?? dados.informante ?? '';
   const duracaoValor = dados.duracao || calcularDuracao(dados.horaInicio, dados.horaFim);
@@ -143,7 +188,9 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
       .join('\n');
   }
 
+  texto = texto.replaceAll('{{ROTULO_INFORMANTE}}', dados.rotuloInformante ?? '');
   texto = texto.replaceAll('{{TREM_ESTACAO_INFORMA}}', dados.tremEstacaoInforma ?? '');
+  texto = texto.replaceAll('{{ROTULO_LOCALIDADE_AFETADA}}', dados.rotuloLocalidadeAfetada ?? '');
   texto = texto.replaceAll('{{TRECHO_ESTACAO_AFETADOS}}', dados.trechoEstacaoAfetados ?? '');
   texto = texto.replaceAll('{{FALHA}}', dados.falha ?? '');
   texto = texto.replaceAll('{{IMPACTO}}', dados.impacto ?? '');

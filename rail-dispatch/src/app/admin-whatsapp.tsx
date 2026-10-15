@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { ConfiguracaoWhatsApp } from '@/lib/whatsapp-config';
+import WhatsAppConnectionModal from '@/components/WhatsAppConnectionModal';
 
 interface AdminWhatsAppProps {
   onNotificarErro?: (erro: unknown, contexto: string) => void;
@@ -381,6 +382,8 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
           <span>{erro}</span>
         </div>
       )}
+
+      <WhatsAppConnectionModal />
 
       {/* Grid de Configurações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

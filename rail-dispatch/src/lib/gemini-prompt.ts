@@ -244,6 +244,7 @@ export interface ContextoPrompt {
   detalheLocalizacao?: string;
   quemComunicou?: string;
   tremEstacaoInforma?: string;
+  paeseAcionado?: boolean;
 }
 
 /**
@@ -251,6 +252,10 @@ export interface ContextoPrompt {
  */
 export function montarSystemInstruction(templatePrompt: string, contexto: ContextoPrompt): string {
   let resultado = templatePrompt;
+
+  resultado += contexto.paeseAcionado
+    ? '\n\nA informação de acionamento PAESE será incluída automaticamente pelo sistema ao final de cada mensagem. Não repita nem invente informações sobre o PAESE no texto gerado.'
+    : '\n\nNão houve acionamento de PAESE para esta ocorrência. Não mencione PAESE nas mensagens.';
 
   // 1. Placeholder de Linha
   resultado = resultado.replaceAll('{{LINHA}}', contexto.linha.toUpperCase());

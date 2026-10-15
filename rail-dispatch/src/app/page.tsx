@@ -54,6 +54,7 @@ export interface ItemLoop {
 }
 
 type EtapaId = 'iniciais' | 'loop' | 'falhas' | 'classificacao';
+type ModalidadePaese = 'SPTrans' | 'ARTESP' | 'Trilhos';
 
 interface EtapaConfig {
   id: EtapaId;
@@ -109,6 +110,9 @@ interface OcorrenciaHistorico {
   prefixo_viagem: string | null;
   classificacoes: string[];
   tipo_in: string | null;
+  paese_acionado: boolean;
+  paese_modalidades: ModalidadePaese[];
+  paese_trecho: string;
   falha: string;
   hora_inicio: string;
   hora_fim: string | null;
@@ -388,6 +392,9 @@ export default function DespachoOcorrencias() {
   const [prefixoViagem, setPrefixoViagem] = useState('');
   const [classificacoes, setClassificacoes] = useState<string[]>([]);
   const [tipoIN, setTipoIN] = useState('');
+  const [paeseAcionado, setPaeseAcionado] = useState(false);
+  const [paeseModalidades, setPaeseModalidades] = useState<ModalidadePaese[]>([]);
+  const [paeseTrecho, setPaeseTrecho] = useState('');
   const [sco, setSCO] = useState('');
   const [identificacaoComunicador, setIdentificacaoComunicador] = useState('');
 
@@ -552,7 +559,9 @@ export default function DespachoOcorrencias() {
       );
     }
     if (etapaAtual.id === 'classificacao') {
-      return !loading && (!classificacoes.includes('IN') || !!tipoIN);
+      return !loading
+        && (!classificacoes.includes('IN') || !!tipoIN)
+        && (!paeseAcionado || (paeseModalidades.length > 0 && !!paeseTrecho.trim()));
     }
     return true;
   };
@@ -1041,6 +1050,9 @@ export default function DespachoOcorrencias() {
         prefixoViagem: (tipoLocalidade === 'trecho' || quemComunicou === 'trem') ? prefixoViagem : '',
         classificacoes,
         tipoIN,
+        paeseAcionado,
+        paeseModalidades: paeseAcionado ? paeseModalidades : [],
+        paeseTrecho: paeseAcionado ? paeseTrecho.trim() : '',
         falhas: [{ descricao: falha, impacto }],
         sco,
         identificacaoComunicador,
@@ -1187,6 +1199,9 @@ export default function DespachoOcorrencias() {
         quemComunicou: tipoLocalidade === 'estacao' ? quemComunicou : 'trem',
         classificacoes,
         tipoIN,
+        paeseAcionado,
+        paeseModalidades: paeseAcionado ? paeseModalidades : [],
+        paeseTrecho: paeseAcionado ? paeseTrecho.trim() : '',
         falhas: [{ descricao: falha, impacto }],
         sco,
         falha,
@@ -2768,6 +2783,81 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
 
               {etapaAtual.id === 'classificacao' && (
                 <div className="space-y-4">
+                  <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3.5">
+                    <legend className="form-label px-1">Acionamento de PAESE</legend>
+                    <p className="text-sm text-slate-600">
+                      Há operação de PAESE para esta ocorrência?
+                    </p>
+                    <div className="flex flex-wrap gap-4">
+                      {[
+                        { value: false, label: 'Não' },
+                        { value: true, label: 'Sim' },
+                      ].map((opcao) => (
+                        <label key={String(opcao.value)} className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="radio"
+                            name="paese-acionado"
+                            checked={paeseAcionado === opcao.value}
+                            onChange={() => {
+                              setPaeseAcionado(opcao.value);
+                              if (!opcao.value) {
+                                setPaeseModalidades([]);
+                                setPaeseTrecho('');
+                              }
+                            }}
+                          />
+                          {opcao.label}
+                        </label>
+                      ))}
+                    </div>
+
+                    {paeseAcionado && (
+                      <div className="space-y-3 border-t border-slate-200 pt-3">
+                        <fieldset>
+                          <legend className="form-label block">Tipo de PAESE (selecione um ou mais)</legend>
+                          <div className="flex flex-wrap gap-x-5 gap-y-2">
+                            {(['SPTrans', 'ARTESP', 'Trilhos'] as const).map((modalidade) => (
+                              <label key={modalidade} className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={paeseModalidades.includes(modalidade)}
+                                  onChange={(event) => {
+                                    setPaeseModalidades((atuais) => event.target.checked
+                                      ? [...atuais, modalidade]
+                                      : atuais.filter((item) => item !== modalidade));
+                                  }}
+                                />
+                                PAESE {modalidade}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+
+                        <div>
+                          <label htmlFor="paese-trecho" className="form-label block">
+                            Trecho atendido pelo PAESE
+                          </label>
+                          <input
+                            id="paese-trecho"
+                            type="text"
+                            required
+                            maxLength={200}
+                            value={paeseTrecho}
+                            onChange={(event) => setPaeseTrecho(event.target.value)}
+                            placeholder="Ex: entre as estações Luz e Tatuapé"
+                            className="w-full form-control"
+                          />
+                        </div>
+
+                        {(paeseModalidades.length === 0 || !paeseTrecho.trim()) && (
+                          <p className="text-xs text-amber-800" role="status">
+                            Selecione ao menos um tipo de PAESE e informe o trecho atendido para avançar.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </fieldset>
+
                   <fieldset>
                     <legend className="form-label block">Classificação da ocorrência</legend>
                     <p className="mb-2 text-sm text-slate-600">Selecione uma ou mais opções.</p>
@@ -3235,6 +3325,12 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                     {ocorrenciaSelecionada.id_trem ? ` · Trem ${ocorrenciaSelecionada.id_trem}` : ''}
                     {ocorrenciaSelecionada.prefixo_viagem ? ` · Prefixo ${ocorrenciaSelecionada.prefixo_viagem}` : ''}
                   </p>
+                  {ocorrenciaSelecionada.paese_acionado && (
+                    <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+                      <strong>PAESE:</strong> {ocorrenciaSelecionada.paese_modalidades.map((modalidade) => `PAESE ${modalidade}`).join(' + ')}
+                      {ocorrenciaSelecionada.paese_trecho ? ` · Trecho: ${ocorrenciaSelecionada.paese_trecho}` : ''}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 font-mono">
                     <span>Início: <strong>{ocorrenciaSelecionada.hora_inicio}</strong></span>
                     <span>·</span>
