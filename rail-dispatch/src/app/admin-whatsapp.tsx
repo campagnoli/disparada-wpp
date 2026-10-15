@@ -324,7 +324,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
               }`}
             >
               {isCustom ? (
-                origem === 'supabase' ? 'Sincronizado via Supabase' : 'Customizado Localmente'
+                origem === 'supabase' ? 'Sincronizado no banco de dados' : 'Customizado Localmente'
               ) : (
                 'Padrão (.env.local)'
               )}

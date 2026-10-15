@@ -127,6 +127,11 @@ export async function POST(req: Request) {
     const horaInicio = typeof dados.horaInicio === 'string' ? dados.horaInicio.trim() : '';
     const idTrem = typeof dados.idTrem === 'string' ? dados.idTrem.trim() : '';
     const prefixoViagem = typeof dados.prefixoViagem === 'string' ? dados.prefixoViagem.trim() : '';
+    const prefixoDeCarga = /^[A-Z]{3}\d{4}$/i.test(prefixoViagem);
+    const apoioMRSCienteRecebido = dados.apoioMRSCiente;
+    const justificativaApoioMRS = typeof dados.justificativaApoioMRS === 'string'
+      ? dados.justificativaApoioMRS.trim()
+      : '';
     const classificacoesRecebidas = Array.isArray(dados.classificacoes) ? dados.classificacoes : [];
     const classificacoes = classificacoesRecebidas.filter(isClassificacaoOcorrencia);
     const classificacoesValidas = classificacoes.length === classificacoesRecebidas.length
@@ -189,6 +194,19 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json(
         { error: 'Se houver acionamento de PAESE, selecione um ou mais tipos válidos e informe o trecho atendido (até 200 caracteres).' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      prefixoDeCarga
+      && (
+        typeof apoioMRSCienteRecebido !== 'boolean'
+        || (!apoioMRSCienteRecebido && (!justificativaApoioMRS || justificativaApoioMRS.length > 500))
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'Informe se o Apoio da MRS está ciente e, se não estiver, justifique (até 500 caracteres).' },
         { status: 400 }
       );
     }
@@ -282,6 +300,10 @@ export async function POST(req: Request) {
     dadosOcorrencia.falhas = falhas;
     dadosOcorrencia.idTrem = idTrem;
     dadosOcorrencia.prefixoViagem = prefixoViagem;
+    dadosOcorrencia.apoioMRSCiente = prefixoDeCarga ? apoioMRSCienteRecebido : null;
+    dadosOcorrencia.justificativaApoioMRS = prefixoDeCarga && apoioMRSCienteRecebido === false
+      ? justificativaApoioMRS
+      : null;
     dadosOcorrencia.classificacoes = classificacoes;
     dadosOcorrencia.tipoIN = inSelecionada ? tipoIN : null;
     dadosOcorrencia.paeseAcionado = paeseAcionado;
@@ -454,8 +476,11 @@ Use os exemplos abaixo para aprender estrutura, tom formal e vocabulário operac
 ${exemplosFewShot}`;
     }
 
+    const dadosParaGeracao = { ...dadosOcorrencia };
+    delete dadosParaGeracao.apoioMRSCiente;
+
     const generationOptions = {
-      contents: `Gere as 3 mensagens com base nestes dados da ocorrência atual:\n${JSON.stringify(dadosOcorrencia)}`,
+      contents: `Gere as 3 mensagens com base nestes dados da ocorrência atual:\n${JSON.stringify(dadosParaGeracao)}`,
       config: {
         systemInstruction: systemInstructionFinal,
         responseMimeType: 'application/json',
@@ -471,19 +496,19 @@ ${exemplosFewShot}`;
               properties: {
                 titulo: {
                   type: Type.STRING,
-                  description: 'Título conciso do despacho operacional, ex: DESPACHO CCO - LINHA 11-CORAL - FALHA DE TRAÇÃO',
+                  description: 'Título curto e específico no formato DESPACHO CCO - LINHA [IDENTIFICAÇÃO] - [TIPO DE OCORRÊNCIA].',
                 },
                 falha: {
                   type: Type.STRING,
-                  description: 'Descrição técnica e direta da falha, utilizando terminologia ferroviária autêntica e siglas de estações.',
+                  description: 'Descrição técnica do sintoma observado, sistema/equipamento/infraestrutura e localização. Diferencie causa confirmada de hipótese ou diagnóstico em apuração; não invente fatos.',
                 },
                 impacto: {
                   type: Type.STRING,
-                  description: 'Impacto operacional imediato na circulação, medidas técnicas de circulação (ex: singela, desvio, velocidade restrita). Citar APENAS a via explicitamente informada ou NENHUMA se a ocorrência for em estação sem via.',
+                  description: 'Consequências confirmadas para circulação, trechos/vias e restrições. Cite APENAS a via explicitamente informada ou NENHUMA se a ocorrência for em estação sem via; sinalize dados indisponíveis.',
                 },
                 acoes: {
                   type: Type.STRING,
-                  description: 'Ações imediatas adotadas pelo CCO e equipes técnicas acionadas (manutenção, via, segurança).',
+                  description: 'Ações concluídas, em andamento e pendentes; equipes acionadas e condições para normalização/liberação, somente quando informadas. Não declare realizada uma medida apenas solicitada ou planejada.',
                 },
               },
               required: ['titulo', 'falha', 'impacto', 'acoes'],
@@ -493,19 +518,19 @@ ${exemplosFewShot}`;
               properties: {
                 titulo: {
                   type: Type.STRING,
-                  description: 'Título executivo para diretoria, ex: INFORME EXECUTIVO CCO - LINHA 11-CORAL - FALHA DE TRAÇÃO',
+                  description: 'Título no formato INFORME EXECUTIVO CCO - LINHA [IDENTIFICAÇÃO] - [TIPO DE OCORRÊNCIA].',
                 },
                 falha: {
                   type: Type.STRING,
-                  description: 'Resumo executivo objetivo com causa raiz, contexto e motivo técnico da falha.',
+                  description: 'Resumo do problema, localização e sistema/equipamento; diferencie causa raiz confirmada, causa provável e diagnóstico em apuração. Não apresente hipótese como fato.',
                 },
                 impacto: {
                   type: Type.STRING,
-                  description: 'Impacto executivo na operação, carrossel de trens e tempo de viagem.',
+                  description: 'Efeitos confirmados no serviço, oferta, intervalos, tempo de viagem e regularidade. Quantifique trens/passageiros apenas com dados confiáveis; separe impactos observados dos potenciais.',
                 },
                 acoes: {
                   type: Type.STRING,
-                  description: 'Resumo executivo com tempo estimado de normalização, providências gerenciais e ações em curso.',
+                  description: 'Mitigação, equipes mobilizadas, ações concluídas/em andamento/pendentes, condições para normalização e previsão validada. Sem previsão confiável, escreva "tempo estimado de normalização: não informado".',
                 },
               },
               required: ['titulo', 'falha', 'impacto', 'acoes'],
@@ -661,13 +686,21 @@ ${exemplosFewShot}`;
     const informacaoPaese = paeseAcionado
       ? `*Acionamento PAESE:* ${paeseModalidades.map((modalidade) => `PAESE ${modalidade}`).join(' e ')} — Trecho: ${paeseTrecho}`
       : '';
-    const incluirInformacaoPaese = (mensagem: string) =>
-      informacaoPaese ? `${mensagem.trim()}\n\n${informacaoPaese}` : mensagem;
+    const informacaoApoioMRS = prefixoDeCarga
+      ? `*Apoio da MRS está ciente:* ${apoioMRSCienteRecebido ? 'Sim' : `Não — ${justificativaApoioMRS}`}`
+      : '';
+    const incluirInformacoesOperacionais = (mensagem: string, informacoes: string[]) => {
+      const assinatura = mensagem.match(/(?:^|\n)(SCO:\s*.+|Responsável:\s*.+|#\s*.+)\s*$/im)?.[1];
+      const corpo = assinatura
+        ? mensagem.slice(0, mensagem.lastIndexOf(assinatura)).trimEnd()
+        : mensagem.trimEnd();
+      return [corpo, ...informacoes.filter(Boolean), assinatura].filter(Boolean).join('\n\n');
+    };
 
     return NextResponse.json({
-      comunicacao: incluirInformacaoPaese(msgComunicacao),
-      operacao: incluirInformacaoPaese(msgOperacao),
-      gerencia: incluirInformacaoPaese(msgGerencia),
+      comunicacao: incluirInformacoesOperacionais(msgComunicacao, [informacaoPaese]),
+      operacao: incluirInformacoesOperacionais(msgOperacao, [informacaoPaese, informacaoApoioMRS]),
+      gerencia: incluirInformacoesOperacionais(msgGerencia, [informacaoPaese, informacaoApoioMRS]),
     });
   } catch (error: unknown) {
     console.error('--- ERRO DETALHADO DO GEMINI ---');

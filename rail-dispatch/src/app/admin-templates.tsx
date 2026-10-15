@@ -27,7 +27,9 @@ import {
   TEMPLATES_MENSAGEM_PADRAO,
   TemplatesMensagem,
   aplicarTemplateMensagem,
+  aplicarEncerramentoNaMensagem,
   DadosTemplateMensagem,
+  modeloEncerramentoValido,
 } from '@/lib/mensagem-templates-pure';
 
 interface AdminTemplatesProps {
@@ -103,7 +105,7 @@ const TAGS_DISPONIVEIS: Array<{
   desc: string;
   grupos: CanalGrupo[];
 }> = [
-  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{DATA}}', desc: 'Data do evento (DD/MM/AAAA)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_FIM}}', desc: 'Horário de fim (exibido apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
@@ -128,6 +130,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   const [salvando, setSalvando] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
   const [canalAtivo, setCanalAtivo] = useState<CanalGrupo>('operacao');
+  const [tipoModeloAtivo, setTipoModeloAtivo] = useState<'normal' | 'encerramento'>('normal');
 
   const [templatesOriginais, setTemplatesOriginais] = useState<TemplatesMensagem>({
     ...TEMPLATES_MENSAGEM_PADRAO,
@@ -142,7 +145,6 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [mostrarPreview, setMostrarPreview] = useState(true);
-  const [simularEncerramento, setSimularEncerramento] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -201,25 +203,29 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   }, [onNotificarErro]);
 
   const houveAlteracao = useMemo(() => {
-    return (
-      templatesEditados.comunicacao !== templatesOriginais.comunicacao ||
-      templatesEditados.operacao !== templatesOriginais.operacao ||
-      templatesEditados.gerencia !== templatesOriginais.gerencia
-    );
+    return JSON.stringify(templatesEditados) !== JSON.stringify(templatesOriginais);
   }, [templatesEditados, templatesOriginais]);
 
-  const textoCanalAtual = templatesEditados[canalAtivo];
+  const textoCanalAtual = tipoModeloAtivo === 'normal'
+    ? templatesEditados[canalAtivo]
+    : templatesEditados.encerramento[canalAtivo];
 
   const handleAtualizarTextoCanal = (novoTexto: string) => {
-    setTemplatesEditados((prev) => ({
-      ...prev,
-      [canalAtivo]: novoTexto,
-    }));
+    setTemplatesEditados((prev) => tipoModeloAtivo === 'normal'
+      ? { ...prev, [canalAtivo]: novoTexto }
+      : {
+        ...prev,
+        encerramento: { ...prev.encerramento, [canalAtivo]: novoTexto },
+      });
   };
 
   const handleSalvar = async () => {
-    if (!templatesEditados.operacao.trim() || !templatesEditados.gerencia.trim()) {
-      setErro('Os modelos de Operação e Gerência não podem ser vazios.');
+    if (
+      Object.values(templatesEditados).some((value) => typeof value === 'string' && !value.trim())
+      || Object.values(templatesEditados.encerramento).some((template) =>
+        !template.trim() || !modeloEncerramentoValido(template))
+    ) {
+      setErro('Todos os modelos devem estar preenchidos. Cada modelo de encerramento deve conter {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.');
       return;
     }
 
@@ -330,13 +336,24 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   };
 
   const previewMensagem = useMemo(() => {
-    return aplicarTemplateMensagem(textoCanalAtual, {
+    const dadosPreview = {
       ...DADOS_SIMULACAO,
-      horaFim: simularEncerramento ? '15:35' : undefined,
-      duracao: simularEncerramento ? '1h 15min' : undefined,
-      isEncerramento: simularEncerramento,
-    });
-  }, [textoCanalAtual, simularEncerramento]);
+    };
+    if (tipoModeloAtivo === 'normal') {
+      return aplicarTemplateMensagem(textoCanalAtual, dadosPreview);
+    }
+    const mensagemNormal = aplicarTemplateMensagem(
+      templatesEditados[canalAtivo],
+      dadosPreview,
+    );
+    return aplicarEncerramentoNaMensagem(
+      mensagemNormal,
+      '15:35',
+      DADOS_SIMULACAO.horaInicio,
+      textoCanalAtual,
+      DADOS_SIMULACAO.titulo,
+    );
+  }, [textoCanalAtual, tipoModeloAtivo, templatesEditados, canalAtivo]);
 
   const tituloGrupo = {
     comunicacao: 'CCO - Comunicação Linha 11',
@@ -349,8 +366,11 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   }).format(new Date());
 
   const tagsParaCanal = useMemo(() => {
-    return TAGS_DISPONIVEIS.filter((t) => t.grupos.includes(canalAtivo));
-  }, [canalAtivo]);
+    return TAGS_DISPONIVEIS.filter((t) =>
+      t.grupos.includes(canalAtivo)
+      && (t.tag !== '{{ENCERRAMENTO}}' || tipoModeloAtivo === 'normal')
+    );
+  }, [canalAtivo, tipoModeloAtivo]);
 
   if (carregando) {
     return (
@@ -383,7 +403,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Personalize o layout, campos e cabeçalhos enviados em cada um dos 3 grupos de WhatsApp sem alterar o código.
-            {origem === 'supabase' && ' (Sincronizado no Supabase)'}
+            {origem === 'supabase' && ' (Sincronizado no banco de dados)'}
             {origem === 'local' && ' (Persistido no servidor)'}
             {updatedAt && (
               <span className="ml-1 text-slate-400">
@@ -494,12 +514,33 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         </button>
       </div>
 
+      <div className="flex gap-2" role="group" aria-label="Tipo do modelo de mensagem">
+        {([
+          { id: 'normal', label: 'Mensagem normal' },
+          { id: 'encerramento', label: 'Mensagem de encerramento' },
+        ] as const).map((modelo) => (
+          <button
+            key={modelo.id}
+            type="button"
+            aria-pressed={tipoModeloAtivo === modelo.id}
+            onClick={() => setTipoModeloAtivo(modelo.id)}
+            className={`rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+              tipoModeloAtivo === modelo.id
+                ? 'border-safira bg-safira text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {modelo.label}
+          </button>
+        ))}
+      </div>
+
       {/* Tags Disponíveis para o Canal Selecionado */}
       <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
             <Tag className="w-3.5 h-3.5 text-safira" />
-            <span>Variáveis dinâmicas para o Grupo {canalAtivo.toUpperCase()}:</span>
+            <span>Variáveis dinâmicas para {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'mensagem de encerramento'} · Grupo {canalAtivo.toUpperCase()}:</span>
           </div>
           <button
             type="button"
@@ -535,7 +576,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-slate-500 px-1">
             <label htmlFor={`editor-template-${canalAtivo}`} className="font-semibold text-slate-700">
-              Template do Grupo {canalAtivo.toUpperCase()} (WhatsApp)
+              Modelo de {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'encerramento'} · Grupo {canalAtivo.toUpperCase()} (WhatsApp)
             </label>
             <span className="font-mono text-[11px]">
               {textoCanalAtual.split('\n').length} linhas | {textoCanalAtual.length} caracteres
@@ -563,18 +604,9 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
                 <Eye className="w-3.5 h-3.5 text-emerald-600" />
                 Pré-visualização ao vivo (Como aparecerá no WhatsApp)
               </span>
-              <button
-                type="button"
-                onClick={() => setSimularEncerramento(!simularEncerramento)}
-                className={`text-[11px] font-medium px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                  simularEncerramento
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold'
-                    : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                }`}
-                title="Alternar entre visualização de ocorrência em andamento e encerrada"
-              >
-                {simularEncerramento ? 'Simulação: Encerrada (com Hora Fim, Duração e *ENCERRAMENTO*)' : 'Simulação: Em Andamento'}
-              </button>
+              <span className="text-[11px] font-medium text-slate-500">
+                Prévia: {tipoModeloAtivo === 'normal' ? 'ocorrência em andamento' : 'ocorrência encerrada'}
+              </span>
             </div>
 
             <div className="overflow-hidden rounded-xl border border-[#2a3942] bg-[#0b141a] shadow-lg">

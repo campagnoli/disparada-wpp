@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { obterConfiguracaoWhatsAppAtiva } from '@/lib/whatsapp-config';
+import { finalizarMensagemComAssinaturaSCO } from '@/lib/mensagens';
 
 const aguardar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const tempoAleatorio = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           number: item.jid,
-          text: item.texto,
+          text: finalizarMensagemComAssinaturaSCO(item.texto),
           linkPreview: false, // Evita disparar pré-visualizações pesadas de URL
         }),
       });
@@ -76,7 +77,10 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ sucesso: true, resultados });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Falha inesperada ao disparar mensagens.' },
+      { status: 500 }
+    );
   }
 }

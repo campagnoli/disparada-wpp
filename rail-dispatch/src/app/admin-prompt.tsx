@@ -223,7 +223,7 @@ export default function AdminPrompt({ onNotificarErro, onNotificarSucesso }: Adm
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Personalize as orientações de tom, estrutura e vocabulário enviadas à IA para compor as mensagens dos 3 grupos.
-            {origem === 'supabase' && ' (Sincronizado na nuvem Supabase)'}
+            {origem === 'supabase' && ' (Sincronizado no banco de dados)'}
             {origem === 'local' && ' (Persistido no servidor da aplicação)'}
             {updatedAt && (
               <span className="ml-1 text-slate-400">

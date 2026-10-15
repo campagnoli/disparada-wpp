@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { incluirSCO, normalizarSCO } from '@/lib/mensagens';
+import { finalizarMensagemComAssinaturaSCO, incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
 import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
+import { obterTemplatesMensagemAtivos } from '@/lib/mensagem-templates';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,7 +26,7 @@ function occurrenceInsertError(error: { code?: string; message: string }) {
 	if (error.code === 'PGRST202' || error.code === '42883') {
 		return NextResponse.json(
 			{
-				error: 'O banco Supabase está desatualizado: a função de gravação da ocorrência não foi encontrada. Execute as migrações 202610130004_occurrence_classification_and_train_fields.sql e 202610150006_paese_activation.sql no Supabase.',
+				error: 'O banco de dados está desatualizado: a função de gravação da ocorrência não foi encontrada. Acione a equipe técnica para atualizar o sistema.',
 			},
 			{ status: 503 }
 		);
@@ -34,7 +35,7 @@ function occurrenceInsertError(error: { code?: string; message: string }) {
 	if (error.code === 'PGRST204' || error.code === '42703') {
 		return NextResponse.json(
 			{
-				error: 'O esquema do banco Supabase está desatualizado e não contém todos os campos da ocorrência. Execute a migração 202610150006_paese_activation.sql no Supabase.',
+				error: 'O banco de dados está desatualizado e não contém todos os campos da ocorrência. Acione a equipe técnica para atualizar o sistema.',
 			},
 			{ status: 503 }
 		);
@@ -42,14 +43,14 @@ function occurrenceInsertError(error: { code?: string; message: string }) {
 
 	if (error.code === '42501') {
 		return NextResponse.json(
-			{ error: 'O Supabase recusou a gravação por falta de permissão. Verifique as permissões da função registrar_ocorrencia.' },
+			{ error: 'O banco de dados recusou a gravação por falta de permissão. Acione a equipe técnica para verificar as permissões.' },
 			{ status: 503 }
 		);
 	}
 
 	return NextResponse.json(
 		{
-			error: `Não foi possível registrar a ocorrência no Supabase${error.code ? ` (código ${error.code})` : ''}.`,
+			error: `Não foi possível registrar a ocorrência no banco de dados${error.code ? ` (código ${error.code})` : ''}.`,
 		},
 		{ status: 500 }
 	);
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
 	} catch (error: unknown) {
 		console.error('Erro inesperado ao registrar ocorrência:', error);
 		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : 'Falha inesperada ao registrar ocorrência no Supabase.' },
+			{ error: error instanceof Error ? error.message : 'Falha inesperada ao registrar ocorrência no banco de dados.' },
 			{ status: 500 }
 		);
 	}
@@ -248,7 +249,7 @@ export async function PATCH(request: Request) {
 	try {
 		const { data: atual, error: buscaError } = await supabase
 			.from('ocorrencias')
-			.select('hora_inicio, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('linha, hora_inicio, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -262,21 +263,26 @@ export async function PATCH(request: Request) {
 		const textoComunicacao = getText(body.msg_comunicacao) || atual.msg_comunicacao;
 		const textoOperacao = getText(body.msg_operacao) || atual.msg_operacao;
 		const textoGerencia = getText(body.msg_gerencia) || atual.msg_gerencia;
+		const { templates } = await obterTemplatesMensagemAtivos();
+		const linha = getText(atual.linha) || 'LINHA NÃO INFORMADA';
 
 		const msgComunicacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio)
+			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio, templates.encerramento.comunicacao, `INFORME CCO - ${linha}`)
 			: textoComunicacao;
 		const msgOperacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio)
+			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio, templates.encerramento.operacao, `DESPACHO CCO - ${linha}`)
 			: textoOperacao;
 		const msgGerencia = horaFim
-			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio)
+			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio, templates.encerramento.gerencia, `INFORME EXECUTIVO CCO - ${linha}`)
 			: textoGerencia;
+		const comunicacaoFinal = finalizarMensagemComAssinaturaSCO(msgComunicacao);
+		const operacaoFinal = finalizarMensagemComAssinaturaSCO(msgOperacao);
+		const gerenciaFinal = finalizarMensagemComAssinaturaSCO(msgGerencia);
 
 		const updatePayload: Record<string, unknown> = {
-			msg_comunicacao: msgComunicacao,
-			msg_operacao: msgOperacao,
-			msg_gerencia: msgGerencia,
+			msg_comunicacao: comunicacaoFinal,
+			msg_operacao: operacaoFinal,
+			msg_gerencia: gerenciaFinal,
 		};
 
 		if (horaFim) {
