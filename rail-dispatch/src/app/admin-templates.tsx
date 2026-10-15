@@ -14,6 +14,14 @@ import {
   MessageSquare,
   Radio,
   Briefcase,
+  CheckCheck,
+  Mic,
+  MoreVertical,
+  Paperclip,
+  Search,
+  Smile,
+  TrainFront,
+  Users,
 } from 'lucide-react';
 import {
   TEMPLATES_MENSAGEM_PADRAO,
@@ -36,6 +44,36 @@ interface DadosTemplatesAPI {
 }
 
 type CanalGrupo = 'comunicacao' | 'operacao' | 'gerencia';
+
+function formatWhatsAppText(text: string): React.ReactNode[] {
+  const pattern = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g;
+  const partes: React.ReactNode[] = [];
+  let inicio = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > inicio) {
+      partes.push(text.slice(inicio, match.index));
+    }
+
+    const conteudo = match[0].slice(1, -1);
+    const chave = `formatado-${match.index}`;
+    if (match[0].startsWith('*')) {
+      partes.push(<strong key={chave} className="font-bold">{conteudo}</strong>);
+    } else if (match[0].startsWith('_')) {
+      partes.push(<em key={chave}>{conteudo}</em>);
+    } else {
+      partes.push(<del key={chave}>{conteudo}</del>);
+    }
+    inicio = match.index + match[0].length;
+  }
+
+  if (inicio < text.length) {
+    partes.push(text.slice(inicio));
+  }
+
+  return partes;
+}
 
 const DADOS_SIMULACAO: DadosTemplateMensagem = {
   titulo: 'DESPACHO CCO - LINHA 11-CORAL - FALHA DE TRAÇÃO',
@@ -300,6 +338,16 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
     });
   }, [textoCanalAtual, simularEncerramento]);
 
+  const tituloGrupo = {
+    comunicacao: 'CCO - Comunicação Linha 11',
+    operacao: 'CCO - Operação Linha 11',
+    gerencia: 'CCO - Gerência Linha 11',
+  }[canalAtivo];
+  const horaPreview = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+
   const tagsParaCanal = useMemo(() => {
     return TAGS_DISPONIVEIS.filter((t) => t.grupos.includes(canalAtivo));
   }, [canalAtivo]);
@@ -529,8 +577,73 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
               </button>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-900 p-3.5 text-slate-100 font-mono text-xs leading-relaxed shadow-sm min-h-[300px] overflow-y-auto whitespace-pre-wrap selection:bg-safira selection:text-white">
-              {previewMensagem}
+            <div className="overflow-hidden rounded-xl border border-[#2a3942] bg-[#0b141a] shadow-lg">
+              <div className="flex items-center gap-3 bg-[#202c33] px-4 py-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-emerald-50">
+                  {canalAtivo === 'comunicacao'
+                    ? <Users className="h-5 w-5" aria-hidden="true" />
+                    : <TrainFront className="h-5 w-5" aria-hidden="true" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-semibold text-slate-100">{tituloGrupo}</h4>
+                  <p className="truncate text-xs text-slate-400">
+                    Você, Supervisão CCO, Tráfego, Manutenção...
+                  </p>
+                </div>
+                <button type="button" aria-label="Pesquisar na conversa" className="rounded-full p-2 text-slate-400">
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button type="button" aria-label="Mais opções do grupo" className="rounded-full p-2 text-slate-400">
+                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div
+                className="min-h-[300px] space-y-4 overflow-y-auto px-3 py-5 sm:px-5"
+                style={{
+                  backgroundColor: '#0b141a',
+                  backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(134, 150, 160, 0.045) 0 1px, transparent 1.5px), radial-gradient(circle at 75% 65%, rgba(134, 150, 160, 0.04) 0 1px, transparent 1.5px)',
+                  backgroundSize: '24px 24px, 32px 32px',
+                }}
+              >
+                <div className="mx-auto w-fit rounded-lg bg-[#182229]/95 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-300 shadow-sm">
+                  Hoje
+                </div>
+
+                <div className="flex justify-end">
+                  <div className="relative max-w-[95%] rounded-xl rounded-tr-sm bg-[#005c4b] px-3.5 pb-2 pt-2.5 text-[12px] leading-relaxed text-[#e9edef] shadow-sm sm:max-w-[88%]">
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 top-0 h-0 w-0 border-l-[8px] border-t-[8px] border-l-[#005c4b] border-t-transparent"
+                    />
+                    <p className="mb-1 text-[11px] font-semibold text-[#7dd3b0]">
+                      Gabriel Campagnoli (CCO)
+                    </p>
+                    <div className="whitespace-pre-wrap break-words">
+                      {formatWhatsAppText(previewMensagem)}
+                    </div>
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#b6c9c3]">
+                      <span>{horaPreview}</span>
+                      <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" aria-label="Lida" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 bg-[#202c33] px-3 py-2.5">
+                <button type="button" aria-label="Emoji" className="rounded-full p-2 text-slate-400">
+                  <Smile className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <div className="flex-1 rounded-lg bg-[#2a3942] px-3 py-2 text-xs text-slate-400">
+                  Digite uma mensagem
+                </div>
+                <button type="button" aria-label="Anexar arquivo" className="rounded-full p-2 text-slate-400">
+                  <Paperclip className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button type="button" aria-label="Gravar áudio" className="rounded-full p-2 text-slate-400">
+                  <Mic className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
         )}
