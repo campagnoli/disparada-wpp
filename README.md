@@ -17,6 +17,10 @@ A migração `rail-dispatch/supabase/migrations/202610150006_paese_activation.sq
 campos de acionamento PAESE e atualiza a função de gravação para persistir a modalidade e o trecho.
 Execute-a no Supabase antes de publicar a versão que inclui o formulário de PAESE.
 
+A migração `rail-dispatch/supabase/migrations/202610150007_aprendizado_despachos.sql` cria a
+tabela de feedback do SCO usada para adaptar as mensagens do Gemini ao estilo operacional.
+Execute-a no Supabase antes de publicar a versão com o aprendizado por exemplos.
+
 No formulário podem ser selecionadas várias falhas. A descrição e o impacto de cada uma podem
 ser editados para a ocorrência atual; a aba Administração permite adicionar, editar e remover
 os padrões compartilhados.

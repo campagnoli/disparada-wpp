@@ -20,6 +20,7 @@ rail-dispatch/
 │   │   │   │   ├── session/route.ts     # Login/logout e verificação de sessão admin
 │   │   │   │   ├── templates/route.ts   # Gestão dinâmica dos modelos de mensagens
 │   │   │   │   └── whatsapp/route.ts    # Configuração dinâmica da Evolution API
+│   │   │   ├── aprendizado-despachos/route.ts # Persistência do feedback do SCO
 │   │   │   ├── disparar-wpp/route.ts    # Despacho de mensagens via Evolution API v2
 │   │   │   ├── estacoes/route.ts        # Consulta de estações por linha
 │   │   │   ├── gerar-mensagens/route.ts # Geração de 3 mensagens via Gemini API
@@ -53,6 +54,11 @@ rail-dispatch/
 ├── next.config.ts                       # Configuração Turbopack e Next.js
 └── package.json                         # Dependências e scripts
 ```
+
+As versões originais geradas pelo Gemini e as mensagens finais aprovadas pelo SCO são
+registradas na tabela `aprendizado_despachos` no disparo. As mensagens editadas são usadas
+como exemplos de estilo em gerações posteriores. A tabela é acessada somente pelo servidor
+com `SUPABASE_SERVICE_ROLE_KEY`.
 
 ---
 

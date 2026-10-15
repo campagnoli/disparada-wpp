@@ -599,6 +599,8 @@ export default function DespachoOcorrencias() {
     operacao: '',
     gerencia: '',
   });
+  const [mensagensGemini, setMensagensGemini] = useState<Mensagens | null>(null);
+  const [dadosOcorrenciaGerada, setDadosOcorrenciaGerada] = useState<Record<string, unknown> | null>(null);
   const [gruposSelecionados, setGruposSelecionados] = useState<{
     comunicacao: boolean;
     operacao: boolean;
@@ -981,6 +983,8 @@ export default function DespachoOcorrencias() {
     }
 
     setLoading(true);
+    setMensagensGemini(null);
+    setDadosOcorrenciaGerada(null);
 
     try {
       let localidade = tipoLocalidade === 'estacao'
@@ -1074,6 +1078,8 @@ export default function DespachoOcorrencias() {
       }
       const data: Mensagens = await res.json();
       setMensagens(data);
+      setMensagensGemini(data);
+      setDadosOcorrenciaGerada(dadosOcorrencia);
       setCodigoEventoAtual(null);
       setDisparoRealizado(false);
     } catch (err: unknown) {
@@ -1252,6 +1258,8 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
 }
 
   const selecionarOcorrencia = (ocorrencia: OcorrenciaDetalhe) => {
+    setMensagensGemini(null);
+    setDadosOcorrenciaGerada(null);
     setOcorrenciaSelecionada(ocorrencia);
     const horaAtual = new Date().toTimeString().slice(0, 5);
     const horaFinal = ocorrencia.hora_fim || horaAtual;
@@ -1440,6 +1448,39 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     }
 
     setDisparandoWpp(true);
+
+    const mensagensFinais = mensagensCompletasParaSalvar ?? textos;
+    if (
+      abaAtiva === 'ocorrencia'
+      && mensagensGemini
+      && dadosOcorrenciaGerada
+    ) {
+      const exemplos = gruposParaEnviar.flatMap((tipoGrupo) => {
+        const mensagemFinal = mensagensFinais[tipoGrupo];
+        const mensagemSugerida = mensagensGemini[tipoGrupo];
+        if (!mensagemFinal.trim()) return [];
+        return [{
+          tipo_grupo: tipoGrupo,
+          mensagem_ia: mensagemSugerida,
+          mensagem_final_sco: mensagemFinal,
+          houve_edicao: mensagemSugerida.trim() !== mensagemFinal.trim(),
+        }];
+      });
+
+      if (exemplos.length > 0) {
+        void fetch('/api/aprendizado-despachos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dadosOcorrencia: dadosOcorrenciaGerada, exemplos }),
+        }).then(async (response) => {
+          if (response.ok) return;
+          const result = await response.json().catch(() => null) as { error?: string } | null;
+          console.warn('Não foi possível salvar o feedback do despacho:', result?.error || response.statusText);
+        }).catch((feedbackError: unknown) => {
+          console.warn('Não foi possível salvar o feedback do despacho:', feedbackError);
+        });
+      }
+    }
 
     try {
       const res = await fetch('/api/disparar-wpp', {
