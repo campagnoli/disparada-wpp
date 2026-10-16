@@ -2061,15 +2061,6 @@ export default function DespachoOcorrencias() {
           </div>
         </header>
 
-        {/* Feedback de envio em tempo real */}
-        {disparandoWpp && (
-          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-900 flex items-center gap-2" role="status" aria-live="polite">
-            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            <span>Enviando mensagens via WhatsApp...</span>
-            <span className="ml-auto text-[10px] opacity-70">Não feche a página enquanto o envio estiver em andamento.</span>
-          </div>
-        )}
-
         <div className="flex gap-1 border-b border-slate-300" role="tablist" aria-label="Seções da ocorrência">
           <button
             id="aba-ocorrencia"
@@ -4614,6 +4605,38 @@ export default function DespachoOcorrencias() {
               >
                 {excluindoOcorrencias ? 'Processando...' : etapaExclusao === 3 ? 'Confirmar Exclusão' : 'Próxima etapa'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de envio de mensagens via WhatsApp */}
+      {disparandoWpp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-envio-whatsapp-titulo"
+        >
+          <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden">
+            <div className="bg-amber-50 border-b border-amber-200 p-4">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2" id="modal-envio-whatsapp-titulo">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-600" />
+                Enviando mensagens via WhatsApp
+              </h3>
+              <p className="text-sm text-slate-600 mt-1">
+                Aguarde enquanto as mensagens são despachadas para os grupos selecionados.
+              </p>
+            </div>
+            <div className="p-6 text-center">
+              <div className="inline-flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-amber-600" />
+                </div>
+                <p className="text-slate-700 font-medium">
+                  Não feche a página enquanto o envio estiver em andamento.
+                </p>
+              </div>
             </div>
           </div>
         </div>
