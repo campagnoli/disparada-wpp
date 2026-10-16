@@ -60,14 +60,23 @@ registradas na tabela `aprendizado_despachos` no disparo. As mensagens editadas 
 como exemplos de estilo em gerações posteriores. A tabela é acessada somente pelo servidor
 com `SUPABASE_SERVICE_ROLE_KEY`.
 
-Os modelos de mensagem de Operação e Gerência seguem o padrão operacional comum a ambas as
-canais: *LINHA*, *OCORRÊNCIA*, *COPESE*, *IN*, *LOCAL*, *DATA*, *HORÁRIO*, *DESEMBARQUE*,
-*DESCRITIVO*, *IMPACTO OPERACIONAL* e *SCO*. A geração também informa os campos `tipoIN`,
-`copese`, `desembarque` e `descritivo` ao preencher os modelos; a aba Administração lista
-todas as variáveis disponíveis. As mensagens de Gerência destinadas à ARTESP utilizam
-linguagem suavizada (por exemplo, “fissura no trilho” em vez de “trilho partido”) para
-diminuir o impacto percebido pelo órgão regulador. A aba Comunicação mantém o modelo
-narrativo próprio, sem esse padrão de campos.
+Os grupos são denominados **Operação CCO / Executivo** e **Gerência / Órgão Regulador**.
+Ambos usam o padrão de mensagem: *LINHA*, *OCORRÊNCIA*, *COPESE*, *IN*, *LOCAL*, *DATA*,
+*HORÁRIO INÍCIO*, *HORÁRIO FIM*, *DESEMBARQUE*, *DESCRITIVO*, *ESTRATÉGIA DE CIRCULAÇÃO*,
+*IMPACTO OPERACIONAL* e *#SCO*. *HORÁRIO FIM* só aparece quando a ocorrência foi encerrada
+com um horário informado; *DESEMBARQUE* só aparece quando o resultado é positivo. A estratégia
+de circulação é exibida acima do impacto operacional somente quando há loops. O grupo
+Operação CCO / Executivo usa tom técnico e executivo; o grupo Gerência / Órgão Regulador usa redação institucional,
+serena e não alarmista, sem omitir ou distorcer a natureza, gravidade, impactos ou riscos
+confirmados. “Fissura no trilho” só deve ser usado quando uma fissura tiver sido confirmada.
+A geração também informa `tipoIN`, `copese`, `desembarque` e `descritivo`; a aba Administração
+lista as variáveis disponíveis. A aba Comunicação mantém seu modelo narrativo próprio.
+Templates operacionais legados identificados pelo formato antigo de Ocorrência/Falha/Impacto/Ações
+são substituídos pelo padrão de campos acima ao serem carregados, inclusive quando configurados
+anteriormente no banco de dados.
+Os campos “Entregue com restrição?” e “Deseja relatar a atuação?” do encerramento são persistidos
+na ocorrência e incluídos nas mensagens finais quando marcados. A migração
+`supabase/migrations/202610160002_occurrence_closure_details.sql` deve ser aplicada no Supabase.
 
 ---
 

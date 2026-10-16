@@ -15,6 +15,30 @@ export * from './mensagem-templates-pure';
 const LOCAL_CONFIG_DIR = path.join(process.cwd(), 'src', 'config');
 const LOCAL_CONFIG_FILE = path.join(LOCAL_CONFIG_DIR, 'templates-mensagem.json');
 
+function atualizarCamposPadraoOperacionais(template: string): string {
+  const templateOperacionalLegado = [
+    /^\s*\*?(?:Ocorrência|Título):?\*?\s*\{\{TITULO\}\}\s*$/im,
+    /^\s*\*?Falha:?\*?\s*\{\{FALHA\}\}\s*$/im,
+    /^\s*\*?Impacto:?\*?\s*\{\{IMPACTO\}\}\s*$/im,
+    /^\s*\*?Ações do CCO e outras áreas:?\*?\s*\{\{ACOES\}\}\s*$/im,
+  ].every((padrao) => padrao.test(template));
+
+  if (templateOperacionalLegado) {
+    return TEMPLATES_MENSAGEM_PADRAO.operacao;
+  }
+
+  return template
+    .replaceAll(
+      '*HORÁRIO:* {{HORA_INICIO}}',
+      '*HORÁRIO INÍCIO:* {{HORA_INICIO}}\n*HORÁRIO FIM:* {{HORA_FIM}}',
+    )
+    .replaceAll('*SCO:* {{SCO}}', '*#SCO:* {{SCO}}')
+    .replaceAll(
+      '*IMPACTO OPERACIONAL*:',
+      '*ESTRATÉGIA DE CIRCULAÇÃO:* {{RESUMO_LOOPS}}\n\n*IMPACTO OPERACIONAL*:',
+    );
+}
+
 function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
   if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) return null;
   const dados = valor as Record<string, unknown>;
@@ -40,6 +64,8 @@ function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
       : padrao.gerencia,
   });
   const modelosNormais = normalizados(normal, TEMPLATES_MENSAGEM_PADRAO);
+  modelosNormais.operacao = atualizarCamposPadraoOperacionais(modelosNormais.operacao);
+  modelosNormais.gerencia = atualizarCamposPadraoOperacionais(modelosNormais.gerencia);
   const modelosEncerramento = normalizados(encerramento, TEMPLATES_MENSAGEM_PADRAO.encerramento);
   for (const grupo of ['comunicacao', 'operacao', 'gerencia'] as const) {
     if (!modeloEncerramentoValido(modelosEncerramento[grupo])) {

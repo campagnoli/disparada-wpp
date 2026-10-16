@@ -81,7 +81,7 @@ const DADOS_SIMULACAO: DadosTemplateMensagem = {
   titulo: 'DESPACHO CCO - LINHA 11-CORAL - FALHA DE TRAÇÃO',
   data: '14/10/2026',
   horaInicio: '14:20',
-  horaFim: '(preenchido após o fim da ocorrência)',
+  horaFim: '',
   rotuloInformante: 'Trem que informa',
   tremEstacaoInforma: 'Trem C120 (Prefixo 1104)',
   rotuloLocalidadeAfetada: 'Trecho afetado',
@@ -111,7 +111,7 @@ const TAGS_DISPONIVEIS: Array<{
   { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{DATA}}', desc: 'Data do evento (DD/MM/AAAA)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{HORA_FIM}}', desc: 'Horário de fim (exibido apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{HORA_FIM}}', desc: 'Horário de fim (omitido até o encerramento da ocorrência)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{DURACAO}}', desc: 'Duração da ocorrência (calculada e exibida apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{ENCERRAMENTO}}', desc: 'Tag *ENCERRAMENTO* em negrito acima do título (apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{ROTULO_INFORMANTE}}', desc: 'Rótulo dinâmico: Trem que informa ou Estação que informa', grupos: ['operacao', 'gerencia'] },
@@ -368,8 +368,13 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
 
   const tituloGrupo = {
     comunicacao: 'CCO - Comunicação Linha 11',
-    operacao: 'CCO - Operação Linha 11',
-    gerencia: 'CCO - Gerência Linha 11',
+    operacao: 'Operação CCO / Executivo',
+    gerencia: 'Gerência / Órgão Regulador',
+  }[canalAtivo];
+  const nomeGrupo = {
+    comunicacao: 'Comunicação / Imprensa / Passageiros',
+    operacao: 'Operação CCO / Executivo',
+    gerencia: 'Gerência / Órgão Regulador',
   }[canalAtivo];
   const horaPreview = new Intl.DateTimeFormat('pt-BR', {
     hour: '2-digit',
@@ -495,7 +500,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
           }`}
         >
           <Radio className="h-4 w-4" />
-          Grupo Operação (CCO / Tráfego)
+          Grupo Operação CCO / Executivo
         </button>
 
         <button
@@ -508,7 +513,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
           }`}
         >
           <Briefcase className="h-4 w-4" />
-          Grupo Gerência (Diretoria / Executivo)
+          Grupo Gerência / Órgão Regulador
         </button>
 
         <button
@@ -551,7 +556,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
             <Tag className="w-3.5 h-3.5 text-safira" />
-            <span>Variáveis dinâmicas para {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'mensagem de encerramento'} · Grupo {canalAtivo.toUpperCase()}:</span>
+            <span>Variáveis dinâmicas para {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'mensagem de encerramento'} · Grupo {nomeGrupo}:</span>
           </div>
           <button
             type="button"
@@ -587,7 +592,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-slate-500 px-1">
             <label htmlFor={`editor-template-${canalAtivo}`} className="font-semibold text-slate-700">
-              Modelo de {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'encerramento'} · Grupo {canalAtivo.toUpperCase()} (WhatsApp)
+              Modelo de {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'encerramento'} · Grupo {nomeGrupo} (WhatsApp)
             </label>
             <span className="font-mono text-[11px]">
               {textoCanalAtual.split('\n').length} linhas | {textoCanalAtual.length} caracteres

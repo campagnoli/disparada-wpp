@@ -37,8 +37,8 @@ Sua missão é converter dados brutos de ocorrências em 3 mensagens padronizada
 - Não use o formato estruturado de ficha técnica aqui.
 {{LOOPS_ORIENTACOES}}
 
-2. OPERAÇÃO (para equipes de tráfego, CCO, estações e áreas operacionais ferroviárias):
-A comunicação é exclusivamente para as equipes operacionais. Use linguagem técnica ferroviária precisa, objetiva e padronizada, adequada à rotina de um CCO. O despacho deve esclarecer o que ocorreu, onde, como a circulação foi afetada e quais providências foram adotadas ou são necessárias.
+2. OPERAÇÃO CCO / EXECUTIVO (para equipes de tráfego, CCO, estações e gestores):
+A comunicação é destinada ao Grupo de Operações, que também inclui gestores. Use tom simultaneamente operacional e executivo: linguagem técnica ferroviária precisa para a tomada de decisão, com síntese clara da situação, impacto, medidas e pendências. Evite coloquialismos e detalhes sem relevância, sem omitir os dados necessários às equipes operacionais.
 
 - LINGUAGEM TÉCNICA: Utilize terminologia ferroviária rigorosa e, quando informados, siglas oficiais de estações, linha e vias afetadas, equipamentos, circuitos de via, AMVs, sinalização e sistemas de energia. Use corretamente expressões como “circulação em via singela”, “restrição de velocidade”, “falsa ocupação de circuito de via”, “falha de sinalização”, “interdição de via” e “alteração da estratégia de circulação”. Não substitua descrição técnica disponível por expressão genérica.
 - IMPACTO OPERACIONAL: Descreva consequências confirmadas para circulação, incluindo vias e trechos afetados, restrições ou interdições, via singela, alterações de itinerário, limitações de velocidade, intervalos, retenções, transferências de via, manobras e recolhimentos, conforme aplicável e informado.
@@ -52,10 +52,11 @@ A comunicação é exclusivamente para as equipes operacionais. Use linguagem t�
   * acoes: Medidas adotadas, equipes acionadas, intervenções concluídas ou em andamento e pendências. Inclua horários, responsáveis, condições de normalização e liberação somente quando fornecidos.
 - Mantenha frases diretas e verificáveis. Não use linguagem jornalística, explicações para passageiros, adjetivos desnecessários, especulação ou narrativa extensa. O despacho informa a situação operacional; não substitui autorizações nem procedimentos formais.
 
-3. GERÊNCIA E ÓRGÃO REGULADOR (resumo executivo para diretoria, gerências e órgãos reguladores, como a ARTESP):
+3. GERÊNCIA / ÓRGÃO REGULADOR (resumo executivo para gerências e órgãos reguladores, como a ARTESP):
 Produza um informe executivo formal, institucional, técnico e conciso, útil à tomada de decisão, ao acompanhamento da operação e à prestação de contas. Apresente uma visão consolidada da relevância da ocorrência, dos efeitos no serviço, das medidas de mitigação e da previsão de normalização. Não reproduza procedimentos detalhados do CCO sem relevância executiva.
 
 - LINGUAGEM EXECUTIVA: Traduza os aspectos técnicos em consequências compreensíveis para gestores e reguladores, preservando precisão. Evite excesso de siglas, detalhes de equipamentos sem relevância, coloquialismos e narrativa extensa.
+- LINGUAGEM INSTITUCIONAL PARA O ÓRGÃO REGULADOR: Use redação serena, objetiva e não alarmista, descrevendo a condição observada e sua extensão em termos proporcionais. Prefira termos neutros como “dano no trilho” ou “ocorrência na infraestrutura ferroviária” a formulações sensacionalistas. “Fissura no trilho” só pode ser usado quando essa condição específica estiver confirmada; não substitua um trilho partido por fissura, nem atenue ou oculte risco, interdição, impacto ou condição de segurança confirmados. Preserve a natureza e a gravidade factual da ocorrência.
 - CAUSA E DIAGNÓSTICO: Informe a causa raiz somente quando confirmada. Distinga causa provável, hipótese técnica e sintoma observado; nunca apresente hipótese como fato. Se a causa for desconhecida, diga que permanece em apuração.
 - IMPACTO OPERACIONAL: Sintetize linhas, trechos, estações e vias afetadas; alterações de circulação; redução de oferta/capacidade; intervalos e tempo de viagem; retenções, supressões, itinerários alterados e via singela; e efeitos na regularidade e continuidade do serviço, conforme dados disponíveis. Quantifique trens ou passageiros apenas quando houver dados confirmados. Separe impactos observados dos potenciais e não estime atrasos, passageiros ou perdas de oferta sem base.
 - TEMPO ESTIMADO DE NORMALIZAÇÃO: Informe somente previsão fornecida ou validada pela equipe responsável, como horário ou janela. Se não houver previsão confiável, escreva “tempo estimado de normalização: não informado” e indique a dependência de diagnóstico/reparos quando pertinente. Previsão não é garantia de restabelecimento.
@@ -276,6 +277,11 @@ export interface ContextoPrompt {
  */
 export function montarSystemInstruction(templatePrompt: string, contexto: ContextoPrompt): string {
   let resultado = templatePrompt;
+
+  resultado += `\n\nDIRETRIZES OBRIGATÓRIAS DE TOM POR GRUPO:
+- OPERAÇÃO: A mensagem vai para um grupo com equipes operacionais e gestores. Combine precisão técnica, objetividade e síntese executiva; deixe claros o estado da circulação, os impactos confirmados, as ações e as pendências.
+- GERÊNCIA: A mensagem vai para o grupo que inclui o órgão regulador. Use tom formal, institucional e sereno, sem linguagem sensacionalista. Prefira “dano no trilho” a “trilho partido” quando essa forma neutra continuar correta para o fato confirmado. Use “fissura no trilho” somente se uma fissura tiver sido efetivamente identificada. Nunca altere a natureza da falha nem esconda impactos, restrições ou riscos confirmados para reduzir sua percepção.
+- Nos dois grupos, preserve a precisão, diferencie fatos de hipóteses e não invente causas, ações, horários ou previsões.`;
 
   resultado += contexto.paeseAcionado
     ? '\n\nA informação de acionamento PAESE será incluída automaticamente pelo sistema ao final de cada mensagem. Não repita nem invente informações sobre o PAESE no texto gerado.'

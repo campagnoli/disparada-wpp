@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { finalizarMensagemComAssinaturaSCO, incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
-import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
+import { aplicarEncerramentoNaMensagem, incluirDetalhesEncerramento } from '@/lib/mensagem-templates-pure';
 import { obterTemplatesMensagemAtivos } from '@/lib/mensagem-templates';
 import { normalizarImpactoOutraLinha } from '@/lib/impacto-outra-linha';
 
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
 	if (codigoEvento) {
 		const { data, error } = await supabase
 			.from('ocorrencias')
-			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, entregue_com_restricao, descricao_restricao, relatar_atuacao, descricao_atuacao, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
 	const from = (page - 1) * pageSize;
 	const { data, count, error } = await supabase
 		.from('ocorrencias')
-		.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status', { count: 'exact' })
+		.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, entregue_com_restricao, descricao_restricao, relatar_atuacao, descricao_atuacao', { count: 'exact' })
 		.order('created_at', { ascending: false })
 		.range(from, from + pageSize - 1);
 
@@ -262,11 +262,34 @@ export async function PATCH(request: Request) {
 	if (horaFim && !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim)) {
 		return NextResponse.json({ error: 'Informe um horário fim válido no formato HH:MM.' }, { status: 400 });
 	}
+	for (const campo of ['entregue_com_restricao', 'relatar_atuacao'] as const) {
+		if (body[campo] !== undefined && typeof body[campo] !== 'boolean') {
+			return NextResponse.json({ error: 'As respostas sobre restrição e atuação devem ser verdadeiras ou falsas.' }, { status: 400 });
+		}
+	}
+	if (
+		(body.descricao_restricao !== undefined && typeof body.descricao_restricao !== 'string')
+		|| (body.descricao_atuacao !== undefined && typeof body.descricao_atuacao !== 'string')
+	) {
+		return NextResponse.json({ error: 'As descrições de encerramento devem ser textos.' }, { status: 400 });
+	}
+	const descricaoRestricaoRecebida = body.descricao_restricao === undefined
+		? undefined
+		: getText(body.descricao_restricao);
+	const descricaoAtuacaoRecebida = body.descricao_atuacao === undefined
+		? undefined
+		: getText(body.descricao_atuacao);
+	if (
+		(descricaoRestricaoRecebida !== undefined && descricaoRestricaoRecebida.length > 5000)
+		|| (descricaoAtuacaoRecebida !== undefined && descricaoAtuacaoRecebida.length > 5000)
+	) {
+		return NextResponse.json({ error: 'As descrições de encerramento devem ter até 5000 caracteres.' }, { status: 400 });
+	}
 
 	try {
 		const { data: atual, error: buscaError } = await supabase
 			.from('ocorrencias')
-			.select('linha, hora_inicio, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('linha, hora_inicio, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, entregue_com_restricao, descricao_restricao, relatar_atuacao, descricao_atuacao, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -287,15 +310,39 @@ export async function PATCH(request: Request) {
 			linhaSecundariaAfetada: atual.linhas_impactadas_secundarias.join(', '),
 			impactoSecundario: atual.descricao_impacto_secundario ?? '',
 		};
+		const entregueComRestricao = body.entregue_com_restricao === undefined
+			? atual.entregue_com_restricao
+			: body.entregue_com_restricao === true;
+		const descricaoRestricao = entregueComRestricao
+			? descricaoRestricaoRecebida ?? atual.descricao_restricao ?? ''
+			: '';
+		const relatarAtuacao = body.relatar_atuacao === undefined
+			? atual.relatar_atuacao
+			: body.relatar_atuacao === true;
+		const descricaoAtuacao = relatarAtuacao
+			? descricaoAtuacaoRecebida ?? atual.descricao_atuacao ?? ''
+			: '';
+		if (horaFim && entregueComRestricao && !descricaoRestricao) {
+			return NextResponse.json({ error: 'Informe a descrição da restrição antes de encerrar a ocorrência.' }, { status: 400 });
+		}
+		if (horaFim && relatarAtuacao && !descricaoAtuacao) {
+			return NextResponse.json({ error: 'Informe a atuação realizada antes de encerrar a ocorrência.' }, { status: 400 });
+		}
+		const detalhesEncerramento = {
+			entregueComRestricao,
+			descricaoRestricao,
+			relatarAtuacao,
+			descricaoAtuacao,
+		};
 
 		const msgComunicacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio, templates.encerramento.comunicacao, `INFORME CCO - ${linha}`, impactoOutraLinha)
+			? incluirDetalhesEncerramento(aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio, templates.encerramento.comunicacao, `INFORME CCO - ${linha}`, impactoOutraLinha), detalhesEncerramento)
 			: textoComunicacao;
 		const msgOperacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio, templates.encerramento.operacao, `DESPACHO CCO - ${linha}`, impactoOutraLinha)
+			? incluirDetalhesEncerramento(aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio, templates.encerramento.operacao, `DESPACHO CCO - ${linha}`, impactoOutraLinha), detalhesEncerramento)
 			: textoOperacao;
 		const msgGerencia = horaFim
-			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio, templates.encerramento.gerencia, `INFORME EXECUTIVO CCO - ${linha}`, impactoOutraLinha)
+			? incluirDetalhesEncerramento(aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio, templates.encerramento.gerencia, `INFORME EXECUTIVO CCO - ${linha}`, impactoOutraLinha), detalhesEncerramento)
 			: textoGerencia;
 		const comunicacaoFinal = finalizarMensagemComAssinaturaSCO(msgComunicacao);
 		const operacaoFinal = finalizarMensagemComAssinaturaSCO(msgOperacao);
@@ -310,13 +357,17 @@ export async function PATCH(request: Request) {
 		if (horaFim) {
 			updatePayload.hora_fim = horaFim;
 			updatePayload.status = 'encerrada';
+			updatePayload.entregue_com_restricao = entregueComRestricao;
+			updatePayload.descricao_restricao = descricaoRestricao || null;
+			updatePayload.relatar_atuacao = relatarAtuacao;
+			updatePayload.descricao_atuacao = descricaoAtuacao || null;
 		}
 
 		const { data, error } = await supabase
 			.from('ocorrencias')
 			.update(updatePayload)
 			.eq('codigo_evento', codigoEvento)
-			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, entregue_com_restricao, descricao_restricao, relatar_atuacao, descricao_atuacao, msg_comunicacao, msg_operacao, msg_gerencia')
 			.single();
 
 		if (error) {

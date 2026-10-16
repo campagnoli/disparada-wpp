@@ -41,6 +41,7 @@ import { opcoesClassificacao, definicoesTiposIN } from '@/lib/classificacao-ocor
 import AdminFalhas, { type FalhaPredefinida } from '@/app/admin-falhas';
 import {
   aplicarEncerramentoNaMensagem,
+  incluirDetalhesEncerramento,
   calcularDuracao,
   modeloEncerramentoValido,
   TEMPLATES_MENSAGEM_PADRAO,
@@ -130,12 +131,23 @@ interface OcorrenciaHistorico {
   hora_inicio: string;
   hora_fim: string | null;
   status: string;
+  entregue_com_restricao: boolean;
+  descricao_restricao: string | null;
+  relatar_atuacao: boolean;
+  descricao_atuacao: string | null;
 }
 
 interface OcorrenciaDetalhe extends OcorrenciaHistorico {
   msg_comunicacao: string;
   msg_operacao: string;
   msg_gerencia: string;
+}
+
+interface DetalhesEncerramento {
+  entregueComRestricao: boolean;
+  descricaoRestricao: string;
+  relatarAtuacao: boolean;
+  descricaoAtuacao: string;
 }
 
 interface PaginaHistorico {
@@ -565,6 +577,30 @@ export default function DespachoOcorrencias() {
     );
   }, [templatesEncerramento]);
 
+  const montarMensagensEncerramento = useCallback((
+    ocorrencia: OcorrenciaDetalhe,
+    fim: string,
+    detalhes: DetalhesEncerramento,
+  ) => ({
+    comunicacao: incluirDetalhesEncerramento(
+      aplicarModeloEncerramento('comunicacao', ocorrencia.msg_comunicacao, fim, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
+      detalhes,
+    ),
+    operacao: incluirDetalhesEncerramento(
+      aplicarModeloEncerramento('operacao', ocorrencia.msg_operacao, fim, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
+      detalhes,
+    ),
+    gerencia: incluirDetalhesEncerramento(
+      aplicarModeloEncerramento('gerencia', ocorrencia.msg_gerencia, fim, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
+      detalhes,
+    ),
+  }), [aplicarModeloEncerramento]);
+
+  const atualizarPreviaEncerramento = (detalhes: DetalhesEncerramento) => {
+    if (!ocorrenciaSelecionada || !horaFim || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim)) return;
+    setMsgFimEditada(montarMensagensEncerramento(ocorrenciaSelecionada, horaFim, detalhes));
+  };
+
   const prefixoDeCarga = /^[A-Z]{3}\d{4}$/i.test(prefixoViagem.trim());
   const etapas: EtapaConfig[] = [
     { id: 'iniciais', titulo: 'Informações iniciais' },
@@ -688,6 +724,10 @@ export default function DespachoOcorrencias() {
   const [buscandoOcorrencia, setBuscandoOcorrencia] = useState(false);
   const [atualizandoHorarioFim, setAtualizandoHorarioFim] = useState(false);
   const [horaFim, setHoraFim] = useState('');
+  const [entregueComRestricao, setEntregueComRestricao] = useState(false);
+  const [descricaoRestricao, setDescricaoRestricao] = useState('');
+  const [relatarAtuacao, setRelatarAtuacao] = useState(false);
+  const [descricaoAtuacao, setDescricaoAtuacao] = useState('');
   const [erroBusca, setErroBusca] = useState('');
   const [copiado, setCopiado] = useState<string | null>(null);
   const [msgFimEditada, setMsgFimEditada] = useState<{
@@ -1482,12 +1522,18 @@ export default function DespachoOcorrencias() {
     setOcorrenciaSelecionada(ocorrencia);
     const horaAtual = new Date().toTimeString().slice(0, 5);
     const horaFinal = ocorrencia.hora_fim || horaAtual;
+    const detalhes: DetalhesEncerramento = {
+      entregueComRestricao: ocorrencia.entregue_com_restricao ?? false,
+      descricaoRestricao: ocorrencia.descricao_restricao ?? '',
+      relatarAtuacao: ocorrencia.relatar_atuacao ?? false,
+      descricaoAtuacao: ocorrencia.descricao_atuacao ?? '',
+    };
+    setEntregueComRestricao(detalhes.entregueComRestricao);
+    setDescricaoRestricao(detalhes.descricaoRestricao);
+    setRelatarAtuacao(detalhes.relatarAtuacao);
+    setDescricaoAtuacao(detalhes.descricaoAtuacao);
     setHoraFim(horaFinal);
-    setMsgFimEditada({
-      comunicacao: aplicarModeloEncerramento('comunicacao', ocorrencia.msg_comunicacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
-      operacao: aplicarModeloEncerramento('operacao', ocorrencia.msg_operacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
-      gerencia: aplicarModeloEncerramento('gerencia', ocorrencia.msg_gerencia, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
-    });
+    setMsgFimEditada(montarMensagensEncerramento(ocorrencia, horaFinal, detalhes));
     setSucessoEncerramento('');
     setDisparoRealizado(false);
     setErroBusca('');
@@ -1499,11 +1545,12 @@ export default function DespachoOcorrencias() {
   const handleMudarHoraFim = (novaHora: string) => {
     setHoraFim(novaHora);
     if (novaHora && /^([01]\d|2[0-3]):[0-5]\d$/.test(novaHora) && ocorrenciaSelecionada) {
-      setMsgFimEditada({
-        comunicacao: aplicarModeloEncerramento('comunicacao', ocorrenciaSelecionada.msg_comunicacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
-        operacao: aplicarModeloEncerramento('operacao', ocorrenciaSelecionada.msg_operacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
-        gerencia: aplicarModeloEncerramento('gerencia', ocorrenciaSelecionada.msg_gerencia, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
-      });
+      setMsgFimEditada(montarMensagensEncerramento(ocorrenciaSelecionada, novaHora, {
+        entregueComRestricao,
+        descricaoRestricao,
+        relatarAtuacao,
+        descricaoAtuacao,
+      }));
     }
   };
 
@@ -1573,15 +1620,35 @@ export default function DespachoOcorrencias() {
       });
       return;
     }
+    if (entregueComRestricao && !descricaoRestricao.trim()) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Descreva a Restrição',
+        mensagem: 'Informe a descrição da restrição para continuar.',
+        textoBotaoConfirmar: 'Entendi',
+      });
+      return;
+    }
+    if (relatarAtuacao && !descricaoAtuacao.trim()) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Descreva a Atuação',
+        mensagem: 'Informe a atuação realizada para continuar.',
+        textoBotaoConfirmar: 'Entendi',
+      });
+      return;
+    }
     setAtualizandoHorarioFim(true);
     setErroBusca('');
     setSucessoEncerramento('');
 
-    const msgAtualizada = {
-      comunicacao: aplicarModeloEncerramento('comunicacao', msgFimEditada.comunicacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
-      operacao: aplicarModeloEncerramento('operacao', msgFimEditada.operacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
-      gerencia: aplicarModeloEncerramento('gerencia', msgFimEditada.gerencia, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
+    const detalhes: DetalhesEncerramento = {
+      entregueComRestricao,
+      descricaoRestricao,
+      relatarAtuacao,
+      descricaoAtuacao,
     };
+    const msgAtualizada = montarMensagensEncerramento(ocorrenciaSelecionada, horaFim, detalhes);
     setMsgFimEditada(msgAtualizada);
 
     try {
@@ -1594,6 +1661,10 @@ export default function DespachoOcorrencias() {
           msg_comunicacao: msgAtualizada.comunicacao,
           msg_operacao: msgAtualizada.operacao,
           msg_gerencia: msgAtualizada.gerencia,
+          entregue_com_restricao: entregueComRestricao,
+          descricao_restricao: descricaoRestricao.trim(),
+          relatar_atuacao: relatarAtuacao,
+          descricao_atuacao: descricaoAtuacao.trim(),
         }),
       });
       const data = (await res.json().catch(() => null)) as {
@@ -1646,7 +1717,7 @@ export default function DespachoOcorrencias() {
       exibirModal({
         tipo: 'aviso',
         titulo: 'Nenhum Grupo Selecionado',
-        mensagem: 'Por favor, selecione ao menos um grupo do WhatsApp (Comunicação, Operação ou Gerência) para realizar o disparo.',
+        mensagem: 'Por favor, selecione ao menos um grupo do WhatsApp (Comunicação, Operação CCO / Executivo ou Gerência / Órgão Regulador) para realizar o disparo.',
         dica: 'Marque a caixa de seleção do grupo desejado antes de clicar no botão de disparo.',
         textoBotaoConfirmar: 'Selecionar Grupos',
       });
@@ -1658,10 +1729,10 @@ export default function DespachoOcorrencias() {
       faltantes.push('Comunicação');
     }
     if (gruposParaEnviar.includes('operacao') && !textos.operacao.trim()) {
-      faltantes.push('Operação');
+      faltantes.push('Operação CCO / Executivo');
     }
     if (gruposParaEnviar.includes('gerencia') && !textos.gerencia.trim()) {
-      faltantes.push('Gerência');
+      faltantes.push('Gerência / Órgão Regulador');
     }
 
     if (faltantes.length > 0) {
@@ -1778,7 +1849,11 @@ export default function DespachoOcorrencias() {
     texto: string
   ) => {
     if (!texto.trim()) {
-      const nomeCanal = canal === 'comunicacao' ? 'Comunicação' : canal === 'operacao' ? 'Operação' : 'Gerência';
+      const nomeCanal = canal === 'comunicacao'
+        ? 'Comunicação'
+        : canal === 'operacao'
+          ? 'Operação CCO / Executivo'
+          : 'Gerência / Órgão Regulador';
       exibirModal({
         tipo: 'aviso',
         titulo: 'Mensagem em Branco',
@@ -3685,7 +3760,7 @@ export default function DespachoOcorrencias() {
                     onChange={(e) => setGruposSelecionados((prev) => ({ ...prev, operacao: e.target.checked }))}
                     className="rounded border-slate-300 text-coral focus:ring-coral"
                   />
-                  <span>Operação</span>
+                  <span>Operação CCO / Executivo</span>
                 </label>
 
                 <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-jade hover:opacity-80 transition-opacity">
@@ -3695,7 +3770,7 @@ export default function DespachoOcorrencias() {
                     onChange={(e) => setGruposSelecionados((prev) => ({ ...prev, gerencia: e.target.checked }))}
                     className="rounded border-slate-300 text-jade focus:ring-jade"
                   />
-                  <span>Gerência</span>
+                  <span>Gerência / Órgão Regulador</span>
                 </label>
 
                 <div className="h-4 w-px bg-slate-200 hidden sm:block" />
@@ -3763,7 +3838,7 @@ export default function DespachoOcorrencias() {
             <div className="border border-slate-300 bg-white p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-coral">Grupo: Operação / Tráfego CCO</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-coral">Grupo: Operação CCO / Executivo</span>
                   <p className="text-xs text-slate-500">Técnico, sucinto e direcionado à circulação</p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -3800,7 +3875,7 @@ export default function DespachoOcorrencias() {
             <div className="border border-slate-300 bg-white p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-jade">Grupo: Gerência / Diretoria</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-jade">Grupo: Gerência / Órgão Regulador</span>
                   <p className="text-xs text-slate-500">Informe executivo com causa e previsão de atuação</p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -4021,8 +4096,8 @@ export default function DespachoOcorrencias() {
 
               {/* Formulário de Encerramento com Horário de Fim */}
               <div className="rounded-md border border-slate-300 bg-white p-3 shadow-sm space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-                  <div className="flex-1">
+                <div className="space-y-3">
+                  <div>
                     <div className="flex items-center justify-between mb-1">
                       <label htmlFor="hora-fim" className="form-label mb-0 text-xs font-semibold">
                         Horário de Encerramento (Fim da Ocorrência)
@@ -4049,10 +4124,117 @@ export default function DespachoOcorrencias() {
                       </p>
                     )}
                   </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 p-3">
+                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={entregueComRestricao}
+                        onChange={(event) => {
+                          const marcado = event.target.checked;
+                          const detalhes = {
+                            entregueComRestricao: marcado,
+                            descricaoRestricao: marcado ? descricaoRestricao : '',
+                            relatarAtuacao,
+                            descricaoAtuacao,
+                          };
+                          setEntregueComRestricao(marcado);
+                          if (!marcado) setDescricaoRestricao('');
+                          atualizarPreviaEncerramento(detalhes);
+                        }}
+                        className="rounded border-slate-300 text-safira focus:ring-safira"
+                      />
+                      Entregue com restrição?
+                    </label>
+                    {entregueComRestricao && (
+                      <div className="mt-2">
+                        <label htmlFor="descricao-restricao" className="form-label text-xs">
+                          Descrição da restrição
+                        </label>
+                        <textarea
+                          id="descricao-restricao"
+                          required
+                          maxLength={5000}
+                          value={descricaoRestricao}
+                          onChange={(event) => {
+                            const descricao = event.target.value;
+                            setDescricaoRestricao(descricao);
+                            atualizarPreviaEncerramento({
+                              entregueComRestricao,
+                              descricaoRestricao: descricao,
+                              relatarAtuacao,
+                              descricaoAtuacao,
+                            });
+                          }}
+                          rows={3}
+                          className="w-full form-control text-sm"
+                          placeholder="Descreva as restrições mantidas após a ocorrência"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-md border border-slate-200 p-3">
+                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={relatarAtuacao}
+                        onChange={(event) => {
+                          const marcado = event.target.checked;
+                          const detalhes = {
+                            entregueComRestricao,
+                            descricaoRestricao,
+                            relatarAtuacao: marcado,
+                            descricaoAtuacao: marcado ? descricaoAtuacao : '',
+                          };
+                          setRelatarAtuacao(marcado);
+                          if (!marcado) setDescricaoAtuacao('');
+                          atualizarPreviaEncerramento(detalhes);
+                        }}
+                        className="rounded border-slate-300 text-safira focus:ring-safira"
+                      />
+                      Deseja relatar a atuação?
+                    </label>
+                    {relatarAtuacao && (
+                      <div className="mt-2">
+                        <label htmlFor="descricao-atuacao" className="form-label text-xs">
+                          Descrição da atuação
+                        </label>
+                        <textarea
+                          id="descricao-atuacao"
+                          required
+                          maxLength={5000}
+                          value={descricaoAtuacao}
+                          onChange={(event) => {
+                            const descricao = event.target.value;
+                            setDescricaoAtuacao(descricao);
+                            atualizarPreviaEncerramento({
+                              entregueComRestricao,
+                              descricaoRestricao,
+                              relatarAtuacao,
+                              descricaoAtuacao: descricao,
+                            });
+                          }}
+                          rows={3}
+                          className="w-full form-control text-sm"
+                          placeholder="Descreva a atuação realizada"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => void handleAtualizarHorarioFim()}
-                  disabled={!horaFim || atualizandoHorarioFim || !carregouTemplatesEncerramento || Boolean(erroTemplatesEncerramento)}
+                    disabled={
+                      !horaFim
+                      || atualizandoHorarioFim
+                      || !carregouTemplatesEncerramento
+                      || Boolean(erroTemplatesEncerramento)
+                      || (entregueComRestricao && !descricaoRestricao.trim())
+                      || (relatarAtuacao && !descricaoAtuacao.trim())
+                    }
                     className="btn btn-safira disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -4065,7 +4247,7 @@ export default function DespachoOcorrencias() {
                   </p>
                 )}
                 <p className="text-[11.5px] text-slate-500">
-                  A mensagem final terá somente o título, o horário de início, o horário de fim e a duração, seguida pela assinatura do SCO.
+                  As restrições informadas e a atuação descrita serão incluídas nas mensagens finais.
                 </p>
               </div>
 
@@ -4093,7 +4275,7 @@ export default function DespachoOcorrencias() {
                         onChange={(e) => setGruposRedisparo((prev) => ({ ...prev, operacao: e.target.checked }))}
                         className="rounded border-slate-300 text-coral focus:ring-coral"
                       />
-                      <span>Operação</span>
+                      <span>Operação CCO / Executivo</span>
                     </label>
                     <label className="inline-flex items-center gap-1 cursor-pointer text-xs font-semibold text-jade hover:opacity-80">
                       <input
@@ -4102,7 +4284,7 @@ export default function DespachoOcorrencias() {
                         onChange={(e) => setGruposRedisparo((prev) => ({ ...prev, gerencia: e.target.checked }))}
                         className="rounded border-slate-300 text-jade focus:ring-jade"
                       />
-                      <span>Gerência</span>
+                      <span>Gerência / Órgão Regulador</span>
                     </label>
                   </div>
                 </div>
@@ -4147,7 +4329,7 @@ export default function DespachoOcorrencias() {
                 <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-coral">Grupo: Operação / Tráfego CCO</span>
+                      <span className="text-xs font-semibold text-coral">Grupo: Operação CCO / Executivo</span>
                       <p className="text-[11px] text-slate-400">Técnico e sucinto para tráfego e estações</p>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -4183,7 +4365,7 @@ export default function DespachoOcorrencias() {
                 <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-semibold text-jade">Grupo: Gerência / Diretoria</span>
+                      <span className="text-xs font-semibold text-jade">Grupo: Gerência / Órgão Regulador</span>
                       <p className="text-[11px] text-slate-400">Resumo executivo de fechamento</p>
                     </div>
                     <div className="flex items-center gap-1.5">

@@ -435,7 +435,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
 
             <div>
               <label htmlFor="jid-operacao" className="form-label text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Grupo Operação (Supervisão / Tráfego CCO)</span>
+                <span>Grupo Operação CCO / Executivo</span>
                 <span className="badge badge-coral text-[10px]">Canal 2</span>
               </label>
               <input
@@ -455,7 +455,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
 
             <div>
               <label htmlFor="jid-gerencia" className="form-label text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Grupo Gerência (Diretoria / Executivos)</span>
+                <span>Grupo Gerência / Órgão Regulador</span>
                 <span className="badge badge-jade text-[10px]">Canal 3</span>
               </label>
               <input
@@ -752,9 +752,9 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
                 onChange={(e) => setCanalTeste(e.target.value as typeof canalTeste)}
                 className="w-full form-control text-xs"
               >
-                <option value="operacao">Grupo Operação ({config.grupos.operacao || 'Não configurado'})</option>
+                <option value="operacao">Grupo Operação CCO / Executivo ({config.grupos.operacao || 'Não configurado'})</option>
                 <option value="comunicacao">Grupo Comunicação ({config.grupos.comunicacao || 'Não configurado'})</option>
-                <option value="gerencia">Grupo Gerência ({config.grupos.gerencia || 'Não configurado'})</option>
+                <option value="gerencia">Grupo Gerência / Órgão Regulador ({config.grupos.gerencia || 'Não configurado'})</option>
                 <option value="personalizado">Número / JID Personalizado...</option>
               </select>
             </div>

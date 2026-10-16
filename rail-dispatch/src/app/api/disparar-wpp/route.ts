@@ -18,8 +18,8 @@ export async function POST(req: Request) {
 
     const filaDisparo = [
       { id: 'comunicacao', nome: 'Comunicação', jid: config.grupos.comunicacao, texto: mensagens?.comunicacao },
-      { id: 'operacao', nome: 'Operação', jid: config.grupos.operacao, texto: mensagens?.operacao },
-      { id: 'gerencia', nome: 'Gerência', jid: config.grupos.gerencia, texto: mensagens?.gerencia },
+      { id: 'operacao', nome: 'Operação CCO / Executivo', jid: config.grupos.operacao, texto: mensagens?.operacao },
+      { id: 'gerencia', nome: 'Gerência / Órgão Regulador', jid: config.grupos.gerencia, texto: mensagens?.gerencia },
     ];
 
     const resultados = [];

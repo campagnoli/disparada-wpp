@@ -31,30 +31,36 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
 *IN:* {{IN}}
 *LOCAL:* {{LOCALIDADE}}
 *DATA:* {{DATA}}
-*HORÁRIO:* {{HORA_INICIO}}
+*HORÁRIO INÍCIO:* {{HORA_INICIO}}
+*HORÁRIO FIM:* {{HORA_FIM}}
 *DESEMBARQUE:* {{DESEMBARQUE}}
 
 *DESCRITIVO:* {{DESCRITIVO}}
 
+*ESTRATÉGIA DE CIRCULAÇÃO:* {{RESUMO_LOOPS}}
+
 *IMPACTO OPERACIONAL*:
 {{IMPACTO}}
 
-*SCO:* {{SCO}}`,
+*#SCO:* {{SCO}}`,
   gerencia: `*LINHA:* {{LINHA}}
 *OCORRÊNCIA:* {{FALHA}}
 *COPESE:* {{COPESE}}
 *IN:* {{IN}}
 *LOCAL:* {{LOCALIDADE}}
 *DATA:* {{DATA}}
-*HORÁRIO:* {{HORA_INICIO}}
+*HORÁRIO INÍCIO:* {{HORA_INICIO}}
+*HORÁRIO FIM:* {{HORA_FIM}}
 *DESEMBARQUE:* {{DESEMBARQUE}}
 
 *DESCRITIVO:* {{DESCRITIVO}}
 
+*ESTRATÉGIA DE CIRCULAÇÃO:* {{RESUMO_LOOPS}}
+
 *IMPACTO OPERACIONAL*:
 {{IMPACTO}}
 
-*SCO:* {{SCO}}`,
+*#SCO:* {{SCO}}`,
   encerramento: {
   comunicacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
@@ -177,7 +183,7 @@ export function aplicarRotulosCondicionaisMensagem(
 
 /**
  * Preenche o template com os dados da ocorrência e remove linhas condicionais vazias.
- * - HORA_FIM e DURACAO só aparecem quando informadas (após encerramento).
+ * - HORA_FIM e DURACAO só aparecem quando informadas.
  * - Quando isEncerramento for true, adiciona *ENCERRAMENTO* em negrito acima do título.
  */
 export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMensagem): string {
@@ -211,7 +217,7 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   texto = texto.replaceAll('{{DATA}}', dados.data ?? '');
   texto = texto.replaceAll('{{HORA_INICIO}}', dados.horaInicio ?? '');
 
-  // 2. HORA_FIM: só deve aparecer quando informada (após encerramento)
+  // 2. HORA_FIM: só deve aparecer quando informada.
   if (dados.horaFim && dados.horaFim.trim()) {
     texto = texto.replaceAll('{{HORA_FIM}}', dados.horaFim.trim());
   } else {
@@ -268,7 +274,7 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   const valorDesembarque = dados.desembarque?.trim() ?? '';
   const valorDescritivo = dados.descritivo?.trim() ?? '';
 
-  if (valorDesembarque) {
+  if (/^sim\b/i.test(valorDesembarque)) {
     texto = texto.replaceAll('{{DESEMBARQUE}}', valorDesembarque);
   } else {
     texto = texto
@@ -308,10 +314,19 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
       .join('\n');
   }
 
-  texto = texto
-    .replaceAll('{{SCO}}', '')
-    .replaceAll('{{INFORMANTE}}', '');
-  if (scoValor) texto = incluirSCO(texto, scoValor.trim());
+  texto = texto.replaceAll('{{INFORMANTE}}', '');
+  if (scoValor) {
+    if (texto.includes('{{SCO}}')) {
+      texto = texto.replaceAll('{{SCO}}', scoValor.trim());
+    } else {
+      texto = incluirSCO(texto, scoValor.trim());
+    }
+  } else {
+    texto = texto
+      .split('\n')
+      .filter((linha) => !linha.includes('{{SCO}}'))
+      .join('\n');
+  }
 
   texto = texto.replace(/\n{3,}/g, '\n\n').trim();
 
@@ -335,7 +350,7 @@ export function aplicarEncerramentoNaMensagem(
 
   const linhasOriginais = mensagem.split('\n');
   const assinaturaIndex = linhasOriginais.findIndex((linha, index) => {
-    if (/^[ \t]*(?:SCO:\s*.+|Responsável:\s*.+)[ \t]*$/i.test(linha)) return true;
+    if (/^[ \t]*(?:\*?#?SCO:\*?\s*.+|Responsável:\s*.+)[ \t]*$/i.test(linha)) return true;
     return /^#\s*.+$/.test(linha.trim())
       && linhasOriginais.slice(index + 1).every((linhaSeguinte) => !linhaSeguinte.trim());
   });
@@ -354,7 +369,8 @@ export function aplicarEncerramentoNaMensagem(
     || '';
   const assinatura = assinaturaIndex >= 0
     ? linhasOriginais[assinaturaIndex].trim()
-    .replace(/^(?:SCO|Responsável):\s*/i, '')
+    .replace(/^\*?#?SCO:\*?\s*/i, '')
+    .replace(/^Responsável:\s*/i, '')
     .replace(/^#\s*/, '')
     : '';
   const template = templateEncerramento || `*Título:* {{TITULO}}
@@ -370,4 +386,38 @@ export function aplicarEncerramentoNaMensagem(
     sco: assinatura,
     ...impactoOutraLinha,
   });
+}
+
+export interface DetalhesEncerramento {
+  entregueComRestricao: boolean;
+  descricaoRestricao: string;
+  relatarAtuacao: boolean;
+  descricaoAtuacao: string;
+}
+
+export function incluirDetalhesEncerramento(
+  mensagem: string,
+  detalhes: DetalhesEncerramento,
+): string {
+  const informacoes = [
+    detalhes.entregueComRestricao && detalhes.descricaoRestricao.trim()
+      ? `*Entregue com restrição:* ${detalhes.descricaoRestricao.trim()}`
+      : '',
+    detalhes.relatarAtuacao && detalhes.descricaoAtuacao.trim()
+      ? `*Atuação:* ${detalhes.descricaoAtuacao.trim()}`
+      : '',
+  ].filter(Boolean);
+  if (!informacoes.length) return mensagem;
+
+  const linhas = mensagem.split('\n');
+  const assinaturaIndex = linhas.findIndex((linha, index) => {
+    if (/^[ \t]*(?:\*?#?SCO:\*?\s*.+|Responsável:\s*.+)[ \t]*$/i.test(linha)) return true;
+    return /^#\s*.+$/.test(linha.trim())
+      && linhas.slice(index + 1).every((linhaSeguinte) => !linhaSeguinte.trim());
+  });
+  const indiceInsercao = assinaturaIndex >= 0 ? assinaturaIndex : linhas.length;
+  const corpo = linhas.slice(0, indiceInsercao).join('\n').trimEnd();
+  const assinatura = linhas.slice(indiceInsercao).join('\n').trimStart();
+
+  return [corpo, ...informacoes, assinatura].filter(Boolean).join('\n');
 }

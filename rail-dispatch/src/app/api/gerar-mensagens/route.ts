@@ -753,7 +753,7 @@ ${exemplosFewShot}`;
       ? `*Apoio da MRS está ciente:* ${apoioMRSCienteRecebido ? 'Sim' : `Não — ${justificativaApoioMRS}`}`
       : '';
     const incluirInformacoesOperacionais = (mensagem: string, informacoes: string[]) => {
-      const assinatura = mensagem.match(/(?:^|\n)(SCO:\s*.+|Responsável:\s*.+|#\s*.+)\s*$/im)?.[1];
+      const assinatura = mensagem.match(/(?:^|\n)(\*?#?SCO:\*?\s*.+|Responsável:\s*.+|#\s*.+)\s*$/im)?.[1];
       const corpo = assinatura
         ? mensagem.slice(0, mensagem.lastIndexOf(assinatura)).trimEnd()
         : mensagem.trimEnd();
