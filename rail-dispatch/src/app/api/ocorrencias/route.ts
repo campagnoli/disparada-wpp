@@ -337,14 +337,37 @@ export async function DELETE(request: Request) {
 	}
 
 	try {
-		const { data, error } = await supabase
+		// Primeiro verifica se os códigos existem antes de excluir
+		const { data: existentes, error: erroBusca } = await supabase
+			.from('ocorrencias')
+			.select('codigo_evento')
+			.in('codigo_evento', codigosLimpos);
+
+		if (erroBusca) {
+			console.error('Falha ao buscar ocorrências:', erroBusca.message);
+			return NextResponse.json(
+				{ error: 'Não foi possível verificar as ocorrências.' },
+				{ status: 500 }
+			);
+		}
+
+		const codigosExistentes = (existentes ?? []).map((item) => item.codigo_evento);
+
+		if (codigosExistentes.length === 0) {
+			return NextResponse.json(
+				{ error: 'Nenhuma ocorrência encontrada com os IDs informados.' },
+				{ status: 404 }
+			);
+		}
+
+		// Executa a exclusão apenas nos que existem
+		const { error: erroDelete } = await supabase
 			.from('ocorrencias')
 			.delete()
-			.in('codigo_evento', codigosLimpos)
-			.select('codigo_evento');
+			.in('codigo_evento', codigosExistentes);
 
-		if (error) {
-			console.error('Falha ao excluir ocorrências no Supabase:', error.message);
+		if (erroDelete) {
+			console.error('Falha ao excluir ocorrências:', erroDelete.message);
 			return NextResponse.json(
 				{ error: 'Não foi possível excluir as ocorrências.' },
 				{ status: 500 }
@@ -353,8 +376,8 @@ export async function DELETE(request: Request) {
 
 		return NextResponse.json({
 			sucesso: true,
-			excluidas: data?.length ?? 0,
-			codigos: data?.map((item) => item.codigo_evento) ?? [],
+			excluidas: codigosExistentes.length,
+			codigos: codigosExistentes,
 		});
 	} catch (error: unknown) {
 		console.error('Erro inesperado ao excluir ocorrências:', error);
