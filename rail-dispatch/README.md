@@ -60,6 +60,15 @@ registradas na tabela `aprendizado_despachos` no disparo. As mensagens editadas 
 como exemplos de estilo em gerações posteriores. A tabela é acessada somente pelo servidor
 com `SUPABASE_SERVICE_ROLE_KEY`.
 
+Os modelos de mensagem de Operação e Gerência seguem o padrão operacional comum a ambas as
+canais: *LINHA*, *OCORRÊNCIA*, *COPESE*, *IN*, *LOCAL*, *DATA*, *HORÁRIO*, *DESEMBARQUE*,
+*DESCRITIVO*, *IMPACTO OPERACIONAL* e *SCO*. A geração também informa os campos `tipoIN`,
+`copese`, `desembarque` e `descritivo` ao preencher os modelos; a aba Administração lista
+todas as variáveis disponíveis. As mensagens de Gerência destinadas à ARTESP utilizam
+linguagem suavizada (por exemplo, “fissura no trilho” em vez de “trilho partido”) para
+diminuir o impacto percebido pelo órgão regulador. A aba Comunicação mantém o modelo
+narrativo próprio, sem esse padrão de campos.
+
 ---
 
 ## 🛠️ Comandos Disponíveis

@@ -25,30 +25,36 @@ export function modeloEncerramentoValido(template: string): boolean {
 
 export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
   comunicacao: `{{TEXTO_COMUNICACAO}}`,
-  operacao: `*Título:* {{TITULO}}
-*Data:* {{DATA}}
-*Horário de início:* {{HORA_INICIO}}
-*Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}
-*{{ROTULO_INFORMANTE}}:* {{TREM_ESTACAO_INFORMA}}
-*{{ROTULO_LOCALIDADE_AFETADA}}:* {{TRECHO_ESTACAO_AFETADOS}}
-*Estratégia de circulação:* {{RESUMO_LOOPS}}
-*Classificação da ocorrência:* {{CLASSIFICACAO}}
-*Falha:* {{FALHA}}
-*Impacto:* {{IMPACTO}}
-*Ações do CCO e outras áreas:* {{ACOES}}`,
-  gerencia: `*Título:* {{TITULO}}
-*Data:* {{DATA}}
-*Horário de início:* {{HORA_INICIO}}
-*Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}
-*{{ROTULO_INFORMANTE}}:* {{TREM_ESTACAO_INFORMA}}
-*{{ROTULO_LOCALIDADE_AFETADA}}:* {{TRECHO_ESTACAO_AFETADOS}}
-*Estratégia de circulação:* {{RESUMO_LOOPS}}
-*Classificação da ocorrência:* {{CLASSIFICACAO}}
-*Falha:* {{FALHA}}
-*Impacto:* {{IMPACTO}}
-*Ações do CCO e outras áreas:* {{ACOES}}`,
+  operacao: `*LINHA:* {{LINHA}}
+*OCORRÊNCIA:* {{FALHA}}
+*COPESE:* {{COPESE}}
+*IN:* {{IN}}
+*LOCAL:* {{LOCALIDADE}}
+*DATA:* {{DATA}}
+*HORÁRIO:* {{HORA_INICIO}}
+*DESEMBARQUE:* {{DESEMBARQUE}}
+
+*DESCRITIVO:* {{DESCRITIVO}}
+
+*IMPACTO OPERACIONAL*:
+{{IMPACTO}}
+
+*SCO:* {{SCO}}`,
+  gerencia: `*LINHA:* {{LINHA}}
+*OCORRÊNCIA:* {{FALHA}}
+*COPESE:* {{COPESE}}
+*IN:* {{IN}}
+*LOCAL:* {{LOCALIDADE}}
+*DATA:* {{DATA}}
+*HORÁRIO:* {{HORA_INICIO}}
+*DESEMBARQUE:* {{DESEMBARQUE}}
+
+*DESCRITIVO:* {{DESCRITIVO}}
+
+*IMPACTO OPERACIONAL*:
+{{IMPACTO}}
+
+*SCO:* {{SCO}}`,
   encerramento: {
   comunicacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
@@ -78,9 +84,13 @@ export interface DadosTemplateMensagem {
   trechoEstacaoAfetados?: string;
   resumoLoops?: string;
   classificacao?: string;
+  tipoIN?: string;
+  copese?: string;
   falha?: string;
   impacto?: string;
   acoes?: string;
+  descritivo?: string;
+  desembarque?: string;
   textoComunicacao?: string;
   mensagemAtual?: string;
   sco?: string;
@@ -251,6 +261,34 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   texto = texto
     .replaceAll('{{LINHA_SECUNDARIA_AFETADA}}', linhaSecundariaAfetada)
     .replaceAll('{{IMPACTO_SECUNDARIO}}', impactoSecundario);
+
+  // Campos do padrão operacional de mensagens (opcionais)
+  const valorTipoIN = dados.tipoIN?.trim() || 'Não';
+  const valorCopese = dados.copese?.trim() || 'Não';
+  const valorDesembarque = dados.desembarque?.trim() ?? '';
+  const valorDescritivo = dados.descritivo?.trim() ?? '';
+
+  if (valorDesembarque) {
+    texto = texto.replaceAll('{{DESEMBARQUE}}', valorDesembarque);
+  } else {
+    texto = texto
+      .split('\n')
+      .filter((linha) => !linha.includes('{{DESEMBARQUE}}'))
+      .join('\n');
+  }
+
+  if (valorDescritivo) {
+    texto = texto.replaceAll('{{DESCRITIVO}}', valorDescritivo);
+  } else {
+    texto = texto
+      .split('\n')
+      .filter((linha) => !linha.includes('{{DESCRITIVO}}'))
+      .join('\n');
+  }
+
+  texto = texto
+    .replaceAll('{{IN}}', valorTipoIN)
+    .replaceAll('{{COPESE}}', valorCopese);
 
   if (dados.resumoLoops) {
     texto = texto.replaceAll('{{RESUMO_LOOPS}}', dados.resumoLoops);

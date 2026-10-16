@@ -77,7 +77,16 @@ function isModalidadePaese(value: unknown): value is 'SPTrans' | 'ARTESP' | 'Tri
   return typeof value === 'string' && ['SPTrans', 'ARTESP', 'Trilhos'].some((item) => item === value);
 }
 
-function extrairDadosSecao(valor: unknown): { titulo: string; falha: string; impacto: string; acoes: string } | null {
+interface DadosSecaoOperacao {
+  titulo: string;
+  falha: string;
+  impacto: string;
+  acoes: string;
+  descritivo?: string;
+  desembarque?: string;
+}
+
+function extrairDadosSecao(valor: unknown): DadosSecaoOperacao | null {
   if (typeof valor === 'object' && valor !== null) {
     const v = valor as Record<string, unknown>;
     if (
@@ -85,12 +94,16 @@ function extrairDadosSecao(valor: unknown): { titulo: string; falha: string; imp
       || typeof v.falha === 'string'
       || typeof v.impacto === 'string'
       || typeof v.acoes === 'string'
+      || typeof v.descritivo === 'string'
+      || typeof v.desembarque === 'string'
     ) {
       return {
         titulo: typeof v.titulo === 'string' ? v.titulo.trim() : '',
         falha: typeof v.falha === 'string' ? v.falha.trim() : '',
         impacto: typeof v.impacto === 'string' ? v.impacto.trim() : '',
         acoes: typeof v.acoes === 'string' ? v.acoes.trim() : '',
+        descritivo: typeof v.descritivo === 'string' ? v.descritivo.trim() : '',
+        desembarque: typeof v.desembarque === 'string' ? v.desembarque.trim() : '',
       };
     }
   }
@@ -525,6 +538,14 @@ ${exemplosFewShot}`;
                   type: Type.STRING,
                   description: 'Ações concluídas, em andamento e pendentes; equipes acionadas e condições para normalização/liberação, somente quando informadas. Não declare realizada uma medida apenas solicitada ou planejada.',
                 },
+                descritivo: {
+                  type: Type.STRING,
+                  description: 'Narrativa completa do que ocorreu, apresentada como o campo *DESCRITIVO* do despacho.',
+                },
+                desembarque: {
+                  type: Type.STRING,
+                  description: 'Impacto a passageiros que desembarcam: "Sim" ou "Não", com o que foi observado. Aparece como o campo *DESEMBARQUE*.',
+                },
               },
               required: ['titulo', 'falha', 'impacto', 'acoes'],
             },
@@ -546,6 +567,14 @@ ${exemplosFewShot}`;
                 acoes: {
                   type: Type.STRING,
                   description: 'Mitigação, equipes mobilizadas, ações concluídas/em andamento/pendentes, condições para normalização e previsão validada. Sem previsão confiável, escreva "tempo estimado de normalização: não informado".',
+                },
+                descritivo: {
+                  type: Type.STRING,
+                  description: 'Narrativa completa do que ocorreu, apresentada como o campo *DESCRITIVO* do informe executivo.',
+                },
+                desembarque: {
+                  type: Type.STRING,
+                  description: 'Impacto a passageiros que desembarcam: "Sim" ou "Não", com o que foi observado. Aparece como o campo *DESEMBARQUE*.',
                 },
               },
               required: ['titulo', 'falha', 'impacto', 'acoes'],
@@ -604,6 +633,8 @@ ${exemplosFewShot}`;
       classificacoes,
       inSelecionada && isTipoIN(tipoIN) ? tipoIN : null,
     );
+    const valorTipoIN = inSelecionada && isTipoIN(tipoIN) ? `IN Tipo ${tipoIN}` : 'Não';
+    const valorCopese = classificacoes.includes('COPESE') ? 'Sim' : 'Não';
     const localidade = String(dadosOcorrencia.localidade ?? '');
 
     // 4. Formatação estruturada das mensagens usando os modelos (templates) configurados
@@ -622,6 +653,10 @@ ${exemplosFewShot}`;
         classificacao: classificacaoFormatada || undefined,
         falha: operacaoData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: operacaoData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
+        tipoIN: valorTipoIN,
+        copese: valorCopese,
+        descritivo: operacaoData.descritivo,
+        desembarque: operacaoData.desembarque,
         temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
         linhaSecundariaAfetada: impactoOutraLinha.linhasImpactadasSecundarias.join(', '),
         impactoSecundario: impactoOutraLinha.descricaoImpactoSecundario,
@@ -659,10 +694,14 @@ ${exemplosFewShot}`;
         classificacao: classificacaoFormatada || undefined,
         falha: gerenciaData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: gerenciaData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
+        acoes: gerenciaData.acoes,
+        tipoIN: valorTipoIN,
+        copese: valorCopese,
+        descritivo: gerenciaData.descritivo,
+        desembarque: gerenciaData.desembarque,
         temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
         linhaSecundariaAfetada: impactoOutraLinha.linhasImpactadasSecundarias.join(', '),
         impactoSecundario: impactoOutraLinha.descricaoImpactoSecundario,
-        acoes: gerenciaData.acoes,
         sco,
         linha,
         via,

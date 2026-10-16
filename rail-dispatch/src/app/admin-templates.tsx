@@ -129,6 +129,10 @@ const TAGS_DISPONIVEIS: Array<{
   { tag: '{{TEXTO_COMUNICACAO}}', desc: 'Texto narrativo gerado pela IA para passageiros', grupos: ['comunicacao'] },
   { tag: '{{LINHA}}', desc: 'Nome da linha operacional', grupos: ['comunicacao', 'operacao', 'gerencia'] },
   { tag: '{{SCO}}', desc: 'Assinatura do SCO (supervisor responsável)', grupos: ['comunicacao', 'operacao', 'gerencia'] },
+  { tag: '{{IN}}', desc: 'Tipo de IN selecionado (ex: "IN Tipo B"), ou "Não" se nenhum tipo for selecionado', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{COPESE}}', desc: 'Indica se a classificação COPESE foi selecionada (ex: "Sim")', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{DESEMBARQUE}}', desc: 'Impacto a passageiros que desembarcam ("Sim"/"Não") e o que foi observado', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{DESCRITIVO}}', desc: 'Narrativa completa do que ocorreu, campo opcional', grupos: ['operacao', 'gerencia'] },
 ];
 
 export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: AdminTemplatesProps) {
