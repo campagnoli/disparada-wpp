@@ -1721,24 +1721,23 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
   }, {});
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <main className="min-h-screen bg-white text-slate-900 p-4 md:p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Cabeçalho Oficial SIDO + Trivia Trens */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-          <div className="flex items-center gap-3.5">
-            {/* Logotipo Trivia Trens */}
-            <div className="flex items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-300 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-white px-2 py-1 rounded border border-slate-300 shadow-sm">
               <img
                 src="/logo-trivia.svg"
                 alt="Logo Trivia Trens"
-                className="h-8 w-auto object-contain"
+                className="h-7 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.src = 'https://www.triviatrens.com.br/img/logos/logo-trivia.svg';
                 }}
               />
             </div>
-            <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+            <div className="h-7 w-px bg-slate-300 hidden sm:block" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-safira text-white tracking-wider">
@@ -1754,8 +1753,8 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </div>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-jade-50 text-green-800 border border-jade-100">
-              <span className="w-2 h-2 rounded-full bg-jade animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-jade-50 text-green-800 border border-jade-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-jade animate-pulse" />
               CCO Ativo
             </span>
           </div>
@@ -1770,7 +1769,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
           </div>
         )}
 
-        <div className="flex gap-2 border-b border-slate-200" role="tablist" aria-label="Seções da ocorrência">
+        <div className="flex gap-1 border-b border-slate-300" role="tablist" aria-label="Seções da ocorrência">
           <button
             id="aba-ocorrencia"
             type="button"
@@ -1778,7 +1777,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             aria-selected={abaAtiva === 'ocorrencia'}
             aria-controls="painel-ocorrencia"
             onClick={() => setAbaAtiva('ocorrencia')}
-            className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${abaAtiva === 'ocorrencia' ? 'border-safira text-safira' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            className={`inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${abaAtiva === 'ocorrencia' ? 'border-safira text-safira' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
           >
             <AlertTriangle className="h-4 w-4" />
             Nova ocorrência
@@ -1793,11 +1792,11 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               setAbaAtiva('historico');
               void carregarHistorico(1);
             }}
-            className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${abaAtiva === 'historico' ? 'border-safira text-safira' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            className={`inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${abaAtiva === 'historico' ? 'border-safira text-safira' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
           >
             <History className="h-4 w-4" />
             Histórico
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{totalHistorico}</span>
+            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600 border border-slate-300">{totalHistorico}</span>
           </button>
           <button
             id="aba-admin"
@@ -1806,7 +1805,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             aria-selected={abaAtiva === 'admin'}
             aria-controls="painel-admin"
             onClick={() => setAbaAtiva('admin')}
-            className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${abaAtiva === 'admin' ? 'border-safira text-safira' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            className={`inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${abaAtiva === 'admin' ? 'border-safira text-safira' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
           >
             <Settings className="h-4 w-4" />
             Administração
@@ -1818,26 +1817,27 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
           role="tabpanel"
           aria-labelledby="aba-ocorrencia"
           hidden={abaAtiva !== 'ocorrencia'}
-          className="grid grid-cols-1 gap-8 lg:grid-cols-12"
+          className="grid grid-cols-1 gap-6 lg:grid-cols-12"
         >
 
           {/* Formulário de Registro */}
-          <div className="lg:col-span-5 card p-4">
-            <h2 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-coral" />
-              Dados da Ocorrência
-            </h2>
+          <div className="lg:col-span-5 p-3">
+            <div className="border border-slate-300 bg-white p-3">
+              <h2 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-coral" />
+                Dados da Ocorrência
+              </h2>
 
-            <form onSubmit={handleGerarMensagens} className="space-y-4">
-              <div aria-live="polite" className="rounded-md bg-safira-50 p-3">
+              <form onSubmit={handleGerarMensagens} className="space-y-4">
+              <div aria-live="polite" className="rounded-md border border-slate-300 bg-slate-50 p-2.5">
                 <p className="text-sm font-semibold text-safira">
                   Etapa {indiceEtapaAtiva + 1} de {totalEtapas}: {etapaAtual.titulo}
                 </p>
-                <div className="mt-2 flex gap-2" aria-hidden="true">
+                <div className="mt-2 flex gap-1.5" aria-hidden="true">
                   {etapas.map((etapa, idx) => (
                     <span
                       key={etapa.id}
-                      className={`h-1.5 flex-1 rounded-full ${indiceEtapaAtiva >= idx ? 'bg-safira' : 'bg-safira/30'}`}
+                      className={`h-1 flex-1 rounded-full ${indiceEtapaAtiva >= idx ? 'bg-safira' : 'bg-slate-200'}`}
                     />
                   ))}
                 </div>
@@ -1938,7 +1938,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
 
                       {/* Seletor de Subsistema / Elemento Afetado */}
                       {localidadeInicio && (
-                        <div className="rounded-lg border border-slate-200 bg-white p-3.5 space-y-3 shadow-2xs">
+                        <div className="rounded-md border border-slate-300 bg-white p-3 space-y-3 shadow-sm">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                               <Building2 className="w-4 h-4 text-safira" />
@@ -2027,7 +2027,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                                           onClick={() => alternarVia(v)}
                                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
                                             selecionada
-                                              ? 'bg-safira text-white border-safira shadow-xs ring-2 ring-safira/25'
+                                              ? 'bg-safira text-white border-safira shadow-sm ring-1 ring-safira/25'
                                               : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
                                           }`}
                                         >
@@ -2138,7 +2138,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                                           onClick={() => alternarPlataforma(p)}
                                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
                                             selecionada
-                                              ? 'bg-safira text-white border-safira shadow-xs ring-2 ring-safira/25'
+                                              ? 'bg-safira text-white border-safira shadow-sm ring-1 ring-safira/25'
                                               : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
                                           }`}
                                         >
@@ -2357,7 +2357,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                       </div>
 
                       {/* Seletor Dinâmico de Via(s) Afetada(s) do Trecho */}
-                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3.5 space-y-3">
+                      <div className="rounded-md border border-slate-300 bg-white p-3 space-y-3 shadow-sm">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-1.5">
                             <GitFork className="w-4 h-4 text-safira" />
@@ -2422,7 +2422,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                                   onClick={() => alternarVia(v)}
                                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
                                     selecionada
-                                      ? 'bg-safira text-white border-safira shadow-xs ring-2 ring-safira/25'
+                                      ? 'bg-safira text-white border-safira shadow-sm ring-1 ring-safira/25'
                                       : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
                                   }`}
                                 >
@@ -2574,7 +2574,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                               onClick={() => handleTrocarQuemComunicou(opcao.id)}
                               className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col gap-1 ${
                                 ativo
-                                  ? 'bg-safira text-white border-safira shadow-xs ring-2 ring-safira/25'
+                                  ? 'bg-safira text-white border-safira shadow-sm ring-1 ring-safira/25'
                                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
                               }`}
                             >
@@ -3217,6 +3217,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               </div>
             </form>
           </div>
+        </div>
 
           {/* Cards de Pré-visualização das Mensagens */}
           <div className="lg:col-span-7 space-y-4">
@@ -3245,7 +3246,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             )}
 
             {/* Seletor de Grupos para Disparo */}
-            <div className="card p-3.5 bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="border border-slate-300 bg-white p-3 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-safira" />
                 <span className="text-xs font-bold text-slate-800">
@@ -3309,7 +3310,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </div>
 
             {/* Card 1: Comunicação */}
-            <div className="card p-4 space-y-2">
+            <div className="border border-slate-300 bg-white p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-wider text-safira">Grupo: Comunicação / Imprensa</span>
@@ -3346,7 +3347,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </div>
 
             {/* Card 2: Operação */}
-            <div className="card p-4 space-y-2">
+            <div className="border border-slate-300 bg-white p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-wider text-coral">Grupo: Operação / Tráfego CCO</span>
@@ -3383,7 +3384,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </div>
 
             {/* Card 3: Gerência */}
-            <div className="card p-4 space-y-2">
+            <div className="border border-slate-300 bg-white p-3 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-wider text-jade">Grupo: Gerência / Diretoria</span>
@@ -3479,7 +3480,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
           role="tabpanel"
           aria-labelledby="aba-historico"
           hidden={abaAtiva !== 'historico'}
-          className="card p-4"
+          className="border border-slate-300 bg-white p-3 shadow-sm"
         >
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800">
@@ -3584,7 +3585,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               )}
 
               {/* Formulário de Encerramento com Horário de Fim */}
-              <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+              <div className="rounded-md border border-slate-300 bg-white p-3 shadow-sm space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
@@ -3952,7 +3953,8 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
           aria-labelledby="aba-admin"
           hidden={abaAtiva !== 'admin'}
         >
-          <AdminFalhas
+          <div className="border border-slate-300 bg-white p-3 shadow-sm">
+            <AdminFalhas
             falhas={falhasPredefinidas}
             onFalhasAtualizadas={carregarFalhasPredefinidas}
             onNotificarErro={exibirErro}
@@ -3965,12 +3967,13 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               });
             }}
           />
+          </div>
         </div>
 
         {/* Modal Universal do SIDO: Mensagens Humanas de Notificação, Sucesso e Erros */}
         {modalConfig.aberto && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-200"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 transition-opacity duration-200"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-sido-titulo"
@@ -3979,7 +3982,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               if (e.target === e.currentTarget) fecharModal();
             }}
           >
-            <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150">
+            <div className="relative w-full max-w-lg bg-white rounded-md shadow-sm border border-slate-300 overflow-hidden transform transition-all duration-200">
               
               {/* Barra superior com indicador temático */}
               <div
