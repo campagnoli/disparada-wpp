@@ -68,6 +68,9 @@ function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
   modelosNormais.gerencia = atualizarCamposPadraoOperacionais(modelosNormais.gerencia);
   const modelosEncerramento = normalizados(encerramento, TEMPLATES_MENSAGEM_PADRAO.encerramento);
   for (const grupo of ['comunicacao', 'operacao', 'gerencia'] as const) {
+    if (!modelosEncerramento[grupo].includes('{{ENTREGA_RESTRICAO}}')) {
+      modelosEncerramento[grupo] = `${modelosEncerramento[grupo].trimEnd()}\n{{ENTREGA_RESTRICAO}}`;
+    }
     if (!modeloEncerramentoValido(modelosEncerramento[grupo])) {
       modelosEncerramento[grupo] = TEMPLATES_MENSAGEM_PADRAO.encerramento[grupo];
     }
@@ -194,7 +197,7 @@ export async function salvarTemplatesMensagem(novosTemplates: TemplatesMensagem)
   erro?: string;
 }> {
   if (Object.values(novosTemplates.encerramento).some((template) => !modeloEncerramentoValido(template))) {
-    throw new Error('Cada modelo de encerramento deve conter as variáveis {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.');
+    throw new Error('Cada modelo de encerramento deve conter as variáveis {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}}, {{DURACAO}} e {{ENTREGA_RESTRICAO}}.');
   }
   const templatesNormalizados: TemplatesMensagem = {
     comunicacao: novosTemplates.comunicacao.trim() || TEMPLATES_MENSAGEM_PADRAO.comunicacao,

@@ -716,7 +716,7 @@ export default function DespachoOcorrencias() {
   const [historico, setHistorico] = useState<OcorrenciaHistorico[]>([]);
   const [totalHistorico, setTotalHistorico] = useState(0);
   const [paginaHistorico, setPaginaHistorico] = useState(1);
-  const [abaAtiva, setAbaAtiva] = useState<'ocorrencia' | 'historico' | 'admin'>('ocorrencia');
+  const [abaAtiva, setAbaAtiva] = useState<'ocorrencia' | 'historico' | 'reporte' | 'admin'>('ocorrencia');
   const [carregandoHistorico, setCarregandoHistorico] = useState(true);
   const [erroHistorico, setErroHistorico] = useState('');
   const [codigoBusca, setCodigoBusca] = useState('');
@@ -2189,6 +2189,17 @@ export default function DespachoOcorrencias() {
           >
             <AlertTriangle className="h-4 w-4" />
             Nova ocorrência
+          </button>
+          <button
+            id="aba-reporte"
+            type="button"
+            role="tab"
+            aria-selected={abaAtiva === 'reporte'}
+            aria-controls="painel-reporte"
+            onClick={() => setAbaAtiva('reporte')}
+            className={`inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${abaAtiva === 'reporte' ? 'border-safira text-safira' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+          >
+            Reporte
           </button>
           <button
             id="aba-historico"
@@ -4591,6 +4602,16 @@ export default function DespachoOcorrencias() {
             </button>
           </div>
         </section>
+
+        <div
+          id="painel-reporte"
+          role="tabpanel"
+          aria-labelledby="aba-reporte"
+          hidden={abaAtiva !== 'reporte'}
+          className="py-10 text-center text-base font-semibold text-slate-600"
+        >
+          Em implementação
+        </div>
 
         <div
           id="painel-admin"

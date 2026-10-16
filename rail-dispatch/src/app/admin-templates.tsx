@@ -28,6 +28,7 @@ import {
   TemplatesMensagem,
   aplicarTemplateMensagem,
   aplicarEncerramentoNaMensagem,
+  incluirDetalhesEncerramento,
   DadosTemplateMensagem,
   modeloEncerramentoValido,
 } from '@/lib/mensagem-templates-pure';
@@ -89,6 +90,7 @@ const DADOS_SIMULACAO: DadosTemplateMensagem = {
   resumoLoops: 'Loop 1: Luz ⇄ Suzano (Intervalo 8 min) | Loop 2: Suzano ⇄ Estudantes (Intervalo 12 min)',
   classificacao: 'IN Tipo A (Interrupção > 2 Intervalos > 20 minutos)',
   falha: 'Falha no sistema de tração com perda de esforço e atuação de freio de emergência.',
+  descritivo: 'Composição apresentou perda de esforço de tração e atuação do freio de emergência na região da estação Luz.',
   impacto: 'Circulação em via singela entre Luz e Tatuapé com maiores intervalos e velocidade reduzida.',
   temImpactoOutraLinha: true,
   linhaSecundariaAfetada: 'Linha 12-Safira',
@@ -113,6 +115,7 @@ const TAGS_DISPONIVEIS: Array<{
   { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_FIM}}', desc: 'Horário de fim (omitido até o encerramento da ocorrência)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{DURACAO}}', desc: 'Duração da ocorrência (calculada e exibida apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{ENTREGA_RESTRICAO}}', desc: 'Resultado da entrega: sem restrição ou com a descrição informada no encerramento', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{ENCERRAMENTO}}', desc: 'Tag *ENCERRAMENTO* em negrito acima do título (apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{ROTULO_INFORMANTE}}', desc: 'Rótulo dinâmico: Trem que informa ou Estação que informa', grupos: ['operacao', 'gerencia'] },
   { tag: '{{TREM_ESTACAO_INFORMA}}', desc: 'Trem ou estação informante', grupos: ['operacao', 'gerencia'] },
@@ -235,7 +238,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
       || Object.values(templatesEditados.encerramento).some((template) =>
         !template.trim() || !modeloEncerramentoValido(template))
     ) {
-      setErro('Todos os modelos devem estar preenchidos. Cada modelo de encerramento deve conter {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.');
+      setErro('Todos os modelos devem estar preenchidos. Cada modelo de encerramento deve conter {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}}, {{DURACAO}} e {{ENTREGA_RESTRICAO}}.');
       return;
     }
 
@@ -356,14 +359,19 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
       templatesEditados[canalAtivo],
       dadosPreview,
     );
-    return aplicarEncerramentoNaMensagem(
+    return incluirDetalhesEncerramento(aplicarEncerramentoNaMensagem(
       mensagemNormal,
       '15:35',
       DADOS_SIMULACAO.horaInicio,
       textoCanalAtual,
       DADOS_SIMULACAO.titulo,
       DADOS_SIMULACAO,
-    );
+    ), {
+      entregueComRestricao: false,
+      descricaoRestricao: '',
+      relatarAtuacao: false,
+      descricaoAtuacao: '',
+    });
   }, [textoCanalAtual, tipoModeloAtivo, templatesEditados, canalAtivo]);
 
   const tituloGrupo = {
@@ -385,6 +393,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
     return TAGS_DISPONIVEIS.filter((t) =>
       t.grupos.includes(canalAtivo)
       && (t.tag !== '{{ENCERRAMENTO}}' || tipoModeloAtivo === 'normal')
+      && (t.tag !== '{{ENTREGA_RESTRICAO}}' || tipoModeloAtivo === 'encerramento')
     );
   }, [canalAtivo, tipoModeloAtivo]);
 

@@ -16,6 +16,7 @@ export const TAGS_OBRIGATORIAS_ENCERRAMENTO = [
   '{{HORA_INICIO}}',
   '{{HORA_FIM}}',
   '{{DURACAO}}',
+  '{{ENTREGA_RESTRICAO}}',
 ] as const;
 
 export function modeloEncerramentoValido(template: string): boolean {
@@ -65,15 +66,18 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
   comunicacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}`,
+*Duração:* {{DURACAO}}
+{{ENTREGA_RESTRICAO}}`,
   operacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}`,
+*Duração:* {{DURACAO}}
+{{ENTREGA_RESTRICAO}}`,
   gerencia: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}`,
+*Duração:* {{DURACAO}}
+{{ENTREGA_RESTRICAO}}`,
   },
 };
 
@@ -376,7 +380,8 @@ export function aplicarEncerramentoNaMensagem(
   const template = templateEncerramento || `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
-*Duração:* {{DURACAO}}`;
+*Duração:* {{DURACAO}}
+{{ENTREGA_RESTRICAO}}`;
 
   return aplicarTemplateMensagem(template, {
     titulo,
@@ -400,16 +405,23 @@ export function incluirDetalhesEncerramento(
   detalhes: DetalhesEncerramento,
 ): string {
   const informacoes = [
-    detalhes.entregueComRestricao && detalhes.descricaoRestricao.trim()
+    detalhes.entregueComRestricao
       ? `*Entregue com restrição:* ${detalhes.descricaoRestricao.trim()}`
-      : '',
+      : '*Entrega:* Entregue sem restrição',
     detalhes.relatarAtuacao && detalhes.descricaoAtuacao.trim()
       ? `*Atuação:* ${detalhes.descricaoAtuacao.trim()}`
       : '',
   ].filter(Boolean);
-  if (!informacoes.length) return mensagem;
+  const statusEntrega = informacoes[0];
+  const temTagEntrega = mensagem.includes('{{ENTREGA_RESTRICAO}}');
+  const mensagemComStatusEntrega = temTagEntrega
+    ? mensagem.replaceAll('{{ENTREGA_RESTRICAO}}', statusEntrega)
+    : mensagem.replaceAll('{{ENTREGA_RESTRICAO}}', '');
+  const informacoesAdicionais = informacoes.slice(temTagEntrega ? 1 : 0);
+  if (!informacoesAdicionais.length && temTagEntrega) return mensagemComStatusEntrega.replace(/\n{3,}/g, '\n\n').trim();
+  if (!informacoesAdicionais.length && !temTagEntrega) return mensagem;
 
-  const linhas = mensagem.split('\n');
+  const linhas = mensagemComStatusEntrega.split('\n');
   const assinaturaIndex = linhas.findIndex((linha, index) => {
     if (/^[ \t]*(?:\*?#?SCO:\*?\s*.+|Responsável:\s*.+)[ \t]*$/i.test(linha)) return true;
     return /^#\s*.+$/.test(linha.trim())
@@ -419,5 +431,7 @@ export function incluirDetalhesEncerramento(
   const corpo = linhas.slice(0, indiceInsercao).join('\n').trimEnd();
   const assinatura = linhas.slice(indiceInsercao).join('\n').trimStart();
 
-  return [corpo, ...informacoes, assinatura].filter(Boolean).join('\n');
+  return [corpo, ...(!temTagEntrega ? [statusEntrega] : []), ...informacoesAdicionais, assinatura]
+    .filter(Boolean)
+    .join('\n');
 }
