@@ -4031,7 +4031,6 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                   <th className="w-8">
                     <input
                       type="checkbox"
-                      defaultChecked={false}
                       checked={
                         historico.length > 0 &&
                         historico.every(
