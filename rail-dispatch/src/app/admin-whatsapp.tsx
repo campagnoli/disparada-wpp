@@ -109,6 +109,14 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
   );
 
   const handleSalvar = async () => {
+    // Valida formato dos JIDs antes de salvar
+    const jids = Object.values(config.grupos);
+    const invalido = jids.some((jid) => jid && !jid.includes('@'));
+    if (invalido) {
+      setErro('Os IDs de grupo (JIDs) devem conter o caractere "@" (ex: 120363384961563518@g.us).');
+      return;
+    }
+
     setSalvando(true);
     setErro('');
     setAviso('');

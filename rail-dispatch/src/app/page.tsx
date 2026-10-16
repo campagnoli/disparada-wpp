@@ -12,11 +12,13 @@ import {
   Lightbulb,
   Save,
   History,
+  Download,
   Clock,
   Search,
   Settings,
   ChevronDown,
   Repeat,
+  RotateCcw,
   BookOpen,
   CheckCircle2,
   X,
@@ -619,6 +621,12 @@ export default function DespachoOcorrencias() {
   });
   const [disparandoCanal, setDisparandoCanal] = useState<string | null>(null);
 
+  /**
+   * Rastreia se o formulário de nova ocorrência foi alterado mas não salvo,
+   * para avisar o operador caso tente navegar away ou fechar a aba.
+   */
+  const [formularioModificado, setFormularioModificado] = useState(false);
+
   const [modalConfig, setModalConfig] = useState<ModalMensagemConfig>({
     aberto: false,
     tipo: 'info',
@@ -801,6 +809,73 @@ export default function DespachoOcorrencias() {
 
     void carregarEstacoes();
     return () => controller.abort();
+  }, []);
+
+  // Protege contra navegação acidental com formulário preenchido e não salvo
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const temPreenchimento = Boolean(
+        localidadeInicio ||
+          localidadeFim ||
+          falhasSelecionadas.length > 0 ||
+          falha.trim().length > 0 ||
+          impacto.trim().length > 0 ||
+          classificacoes.length > 0 ||
+          tipoIN.trim().length > 0 ||
+          idTrem.trim().length > 0 ||
+          prefixoViagem.trim().length > 0 ||
+          sco.trim().length > 0 ||
+          identificacaoComunicador.trim().length > 0 ||
+          horaInicio.trim().length > 0 ||
+          gruposSelecionados.comunicacao ||
+          gruposSelecionados.operacao ||
+          gruposSelecionados.gerencia
+      );
+      if (temPreenchimento && !codigoEventoAtual && !disparoRealizado) {
+        e.preventDefault();
+        e.returnValue =
+          'Você tem dados de ocorrência preenchidos que ainda não foram salvos. Tem certeza de que deseja sair?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [
+    localidadeInicio,
+    localidadeFim,
+    falhasSelecionadas,
+    falha,
+    impacto,
+    classificacoes,
+    tipoIN,
+    idTrem,
+    prefixoViagem,
+    sco,
+    identificacaoComunicador,
+    horaInicio,
+    gruposSelecionados,
+    codigoEventoAtual,
+    disparoRealizado,
+  ]);
+
+  // Easter egg: Konami code revela mensagem do Aprendiz Maçom no console
+  useEffect(() => {
+    const konami: string[] = [];
+    const handler = (e: KeyboardEvent) => {
+      konami.push(e.key);
+      if (konami.length > 10) konami.shift();
+      const seq = konami.join('');
+      if (
+        seq === 'ArrowUpArrowUpArrowDownArrowDownArrowLeftArrowRightArrowLeftArrowRightBA'
+      ) {
+        console.log('%c☐ Oficina do Aprendiz Maçom ☐', 'color: #8b4513; font-size: 14px; font-weight: bold;');
+        console.log('%c"Trabalhe com retidão, aprenda os segredos da oficina. O martelo e o cinzel aguardam."', 'color: #5c4033; font-size: 12px;');
+        console.log('%cGrau: Aprendiz · Símbolo: Esquadro e Compasso · Luz: ao Oriente', 'color: #5c4033; font-size: 11px; font-style: italic;');
+        konami.length = 0;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   // Carregamento dinâmico de vias e subsistemas para Estação no Supabase
@@ -1559,6 +1634,85 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     setTimeout(() => setCopiado(null), 2000);
   };
 
+  /**
+   * Exporta o histórico carregado para um arquivo CSV (separado por ponto-e-vírgula).
+   * Útil para relatórios operacionais e auditoria do CCO.
+   */
+  const exportarHistoricoCSV = () => {
+    if (historico.length === 0) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Nenhum dado para exportar',
+        mensagem: 'Não há ocorrências no histórico para exportar.',
+        textoBotaoConfirmar: 'OK',
+      });
+      return;
+    }
+
+    const cabecalho = [
+      'ID do evento',
+      'Data/Hora criação',
+      'Linha',
+      'Via',
+      'Localidade',
+      'Trem',
+      'Prefixo viagem',
+      'Falha',
+      'Classificações',
+      'Tipo IN',
+      'PAESE acionado',
+      'PAESE modalidades',
+      'PAESE trecho',
+      'Hora início',
+      'Hora fim',
+      'Status',
+    ].join(';');
+
+    const linhas = historico.map((item) =>
+      [
+        item.codigo_evento ?? '',
+        item.created_at ?? '',
+        item.linha,
+        item.via,
+        item.localidade,
+        item.id_trem ?? '',
+        item.prefixo_viagem ?? '',
+        `"${(item.falha ?? '').replace(/"/g, '""')}"`,
+        item.classificacoes.join('; '),
+        item.tipo_in ?? '',
+        item.paese_acionado ? 'Sim' : 'Não',
+        item.paese_modalidades.join('; '),
+        item.paese_trecho,
+        item.hora_inicio,
+        item.hora_fim ?? '',
+        item.status,
+      ].join(';')
+    );
+
+    const conteudo = [cabecalho, ...linhas].join('\r\n');
+    const blob = new Blob(['\uFEFF' + conteudo], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute(
+      'download',
+      `historico_ocorrencias_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    exibirModal({
+      tipo: 'sucesso',
+      titulo: 'Histórico exportado',
+      mensagem: `O histórico foi exportado com ${historico.length} ocorrência${
+        historico.length !== 1 ? 's' : ''
+      } para CSV.`,
+      textoBotaoConfirmar: 'OK',
+    });
+  };
+
   const estacoesPorLinha = estacoes.reduce<Record<string, Estacao[]>>((acc, est) => {
     const l = est.linha || 'Outras';
     if (!acc[l]) acc[l] = [];
@@ -1606,6 +1760,15 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </span>
           </div>
         </header>
+
+        {/* Feedback de envio em tempo real */}
+        {disparandoWpp && (
+          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-900 flex items-center gap-2" role="status" aria-live="polite">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            <span>Enviando mensagens via WhatsApp...</span>
+            <span className="ml-auto text-[10px] opacity-70">Não feche a página enquanto o envio estiver em andamento.</span>
+          </div>
+        )}
 
         <div className="flex gap-2 border-b border-slate-200" role="tablist" aria-label="Seções da ocorrência">
           <button
@@ -2990,6 +3153,54 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                   </button>
                 )}
                 <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Tem certeza de que deseja limpar todos os campos do formulário? Os dados não salvos serão perdidos.'
+                      )
+                    ) {
+                      setLocalidadeInicio('');
+                      setLocalidadeFim('');
+                      setViasSelecionadas([]);
+                      setViasDisponiveis([]);
+                      setPlataformasSelecionadas([]);
+                      setPlataformasDisponiveis([]);
+                      setDetalheLocalizacao('');
+                      setElementoAfetado('geral');
+                      setQuemComunicou('estacao');
+                      setIdTrem('');
+                      setPrefixoViagem('');
+                      setClassificacoes([]);
+                      setTipoIN('');
+                      setPaeseAcionado(false);
+                      setPaeseModalidades([]);
+                      setPaeseTrecho('');
+                      setSCO('');
+                      setIdentificacaoComunicador('');
+                      setFalhasSelecionadas([]);
+                      setFalhaEditada(null);
+                      setImpactoEditado(null);
+                      setEstrategiaLoop(false);
+                      setQtdLoops(1);
+                      setLoops([
+                        { id: '1', estacaoInicio: '', estacaoFim: '', intervaloTeorico: '' },
+                      ]);
+                      setEtapaAtiva('iniciais');
+                      setHoraInicio('');
+                      setMensagens({ comunicacao: '', operacao: '', gerencia: '' });
+                      setCodigoEventoAtual(null);
+                      setDisparoRealizado(false);
+                      setErroBusca('');
+                    }
+                  }}
+                  disabled={loading}
+                  className="flex-1 btn btn-secondary text-rose-600 hover:bg-rose-50 border-rose-200 disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Limpar formulário
+                </button>
+                <button
                   type="submit"
                   disabled={!isEtapaValida()}
                   className="flex-1 btn btn-safira disabled:opacity-50"
@@ -3275,15 +3486,26 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               <History className="h-4 w-4 text-safira" />
               Histórico recente de ocorrências
             </h2>
-            <button
-              type="button"
-              onClick={() => void carregarHistorico(paginaHistorico)}
-              disabled={carregandoHistorico}
-              className="btn btn-secondary btn-sm disabled:opacity-50"
-            >
-              <History className="h-4 w-4" />
-              {carregandoHistorico ? 'Atualizando...' : 'Atualizar lista'}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => void exportarHistoricoCSV()}
+                disabled={carregandoHistorico || historico.length === 0}
+                className="btn btn-secondary btn-sm disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => void carregarHistorico(paginaHistorico)}
+                disabled={carregandoHistorico}
+                className="btn btn-secondary btn-sm disabled:opacity-50"
+              >
+                <History className="h-4 w-4" />
+                {carregandoHistorico ? 'Atualizando...' : 'Atualizar lista'}
+              </button>
+            </div>
           </div>
 
           {erroHistorico && <p className="mb-3 text-sm text-rose-700" role="alert">{erroHistorico}</p>}
@@ -3864,6 +4086,15 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
         )}
 
       </div>
+
+      {/* Símbolo do Aprendiz Maçom (apenas para inspeção do DOM) */}
+      <div
+        className="fixed bottom-0 right-0 w-px h-px bg-transparent opacity-0 pointer-events-none"
+        title="Oficina do Aprendiz Maçom · Esquadro e Compasso · Grau: Aprendiz"
+      >
+        ☐
+      </div>
+
     </main>
   );
 }
