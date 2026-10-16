@@ -42,7 +42,13 @@ import {
 import { isModeloGemini, modelosGemini, type ModeloGemini } from '@/lib/gemini-models';
 import { opcoesClassificacao, definicoesTiposIN } from '@/lib/classificacao-ocorrencia';
 import AdminFalhas, { type FalhaPredefinida } from '@/app/admin-falhas';
-import { calcularDuracao, aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
+import {
+  aplicarEncerramentoNaMensagem,
+  calcularDuracao,
+  modeloEncerramentoValido,
+  TEMPLATES_MENSAGEM_PADRAO,
+  type TemplatesGrupoMensagem,
+} from '@/lib/mensagem-templates-pure';
 import {
   buscarViasEstacao,
   buscarDadosEstacao,
@@ -59,7 +65,7 @@ export interface ItemLoop {
   intervaloTeorico: string;
 }
 
-type EtapaId = 'iniciais' | 'loop' | 'falhas' | 'classificacao';
+type EtapaId = 'iniciais' | 'loop' | 'falhas' | 'classificacao' | 'apoio-mrs';
 type ModalidadePaese = 'SPTrans' | 'ARTESP' | 'Trilhos';
 
 interface EtapaConfig {
@@ -172,6 +178,7 @@ function humanizarErro(erro: unknown, contexto?: string): InformacoesErroHumaniz
     textoBruto = String(erro ?? 'Erro desconhecido');
   }
 
+  textoBruto = textoBruto.replace(/supabase/gi, 'banco de dados');
   const textoMinusculo = textoBruto.toLowerCase();
 
   // 1. Sobrecarga / 503 / Service Unavailable do Gemini
@@ -259,17 +266,16 @@ function humanizarErro(erro: unknown, contexto?: string): InformacoesErroHumaniz
     };
   }
 
-  // 6. Banco de Dados / Supabase
+  // 6. Banco de Dados
   if (
     textoMinusculo.includes('banco') ||
-    textoMinusculo.includes('supabase') ||
     textoMinusculo.includes('pgrst')
   ) {
     return {
       titulo: 'Falha ao Sincronizar com o Banco de Dados',
       mensagem:
         'Ocorreu uma instabilidade ao salvar ou recuperar os dados da ocorrência no banco central.',
-      dica: 'Aguarde alguns segundos e tente novamente. Se a mensagem persistir, verifique a conexão com o banco de dados Supabase.',
+      dica: 'Aguarde alguns segundos e tente novamente. Se a mensagem persistir, verifique a conexão com o banco de dados.',
       detalhesTecnicos: textoBruto,
     };
   }
@@ -396,6 +402,13 @@ export default function DespachoOcorrencias() {
   const [quemComunicou, setQuemComunicou] = useState<QuemComunicou>('estacao');
   const [idTrem, setIdTrem] = useState('');
   const [prefixoViagem, setPrefixoViagem] = useState('');
+  const [apoioMRSCiente, setApoioMRSCiente] = useState<boolean | null>(null);
+  const [justificativaApoioMRS, setJustificativaApoioMRS] = useState('');
+  const [templatesEncerramento, setTemplatesEncerramento] = useState<TemplatesGrupoMensagem>(
+    TEMPLATES_MENSAGEM_PADRAO.encerramento,
+  );
+  const [carregouTemplatesEncerramento, setCarregouTemplatesEncerramento] = useState(false);
+  const [erroTemplatesEncerramento, setErroTemplatesEncerramento] = useState('');
   const [classificacoes, setClassificacoes] = useState<string[]>([]);
   const [tipoIN, setTipoIN] = useState('');
   const [paeseAcionado, setPaeseAcionado] = useState(false);
@@ -476,11 +489,77 @@ export default function DespachoOcorrencias() {
   const [horaInicio, setHoraInicio] = useState('');
   const [modeloGemini, setModeloGemini] = useState<ModeloGemini>('gemini-3.5-flash-lite');
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const carregarModelosEncerramento = async () => {
+      try {
+        const response = await fetch('/api/admin/templates', {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const data = await response.json() as {
+          templates?: { encerramento?: Partial<TemplatesGrupoMensagem> };
+          error?: string;
+        };
+        if (!response.ok || !data.templates?.encerramento) {
+          throw new Error(data.error || 'Não foi possível carregar os modelos de encerramento.');
+        }
+        const modelos = data.templates.encerramento;
+        if (
+          !modelos.comunicacao || !modeloEncerramentoValido(modelos.comunicacao)
+          || !modelos.operacao || !modeloEncerramentoValido(modelos.operacao)
+          || !modelos.gerencia || !modeloEncerramentoValido(modelos.gerencia)
+        ) {
+          throw new Error('Os modelos de encerramento estão incompletos. Acione a equipe técnica.');
+        }
+        setTemplatesEncerramento({
+          comunicacao: modelos.comunicacao,
+          operacao: modelos.operacao,
+          gerencia: modelos.gerencia,
+        });
+        setErroTemplatesEncerramento('');
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          const message = error instanceof Error ? error.message : 'Falha ao carregar modelos de encerramento.';
+          setErroTemplatesEncerramento(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setCarregouTemplatesEncerramento(true);
+      }
+    };
+    void carregarModelosEncerramento();
+    return () => controller.abort();
+  }, []);
+
+  const aplicarModeloEncerramento = useCallback((
+    canal: keyof TemplatesGrupoMensagem,
+    mensagem: string,
+    horaFim: string,
+    horaInicio?: string,
+    linha?: string,
+  ) => {
+    const rotulo = canal === 'operacao'
+      ? 'DESPACHO CCO'
+      : canal === 'gerencia'
+        ? 'INFORME EXECUTIVO CCO'
+        : 'INFORME CCO';
+    const tituloFallback = `${rotulo} - ${linha || 'LINHA NÃO INFORMADA'}`;
+    return aplicarEncerramentoNaMensagem(
+      mensagem,
+      horaFim,
+      horaInicio,
+      templatesEncerramento[canal],
+      tituloFallback,
+    );
+  }, [templatesEncerramento]);
+
+  const prefixoDeCarga = /^[A-Z]{3}\d{4}$/i.test(prefixoViagem.trim());
   const etapas: EtapaConfig[] = [
     { id: 'iniciais', titulo: 'Informações iniciais' },
     ...(estrategiaLoop ? [{ id: 'loop' as const, titulo: 'Configuração de Loop' }] : []),
     { id: 'falhas', titulo: 'Falha e impacto operacional' },
     { id: 'classificacao', titulo: 'Classificação da ocorrência' },
+    ...(prefixoDeCarga ? [{ id: 'apoio-mrs' as const, titulo: 'Confirmação do Apoio da MRS' }] : []),
   ];
 
   const indiceEtapaAtiva = Math.max(
@@ -569,6 +648,11 @@ export default function DespachoOcorrencias() {
         && (!classificacoes.includes('IN') || !!tipoIN)
         && (!paeseAcionado || (paeseModalidades.length > 0 && !!paeseTrecho.trim()));
     }
+    if (etapaAtual.id === 'apoio-mrs') {
+      return !loading
+        && apoioMRSCiente !== null
+        && (apoioMRSCiente || !!justificativaApoioMRS.trim());
+    }
     return true;
   };
 
@@ -617,6 +701,8 @@ export default function DespachoOcorrencias() {
     operacao: '',
     gerencia: '',
   });
+  const [mensagensGemini, setMensagensGemini] = useState<Mensagens | null>(null);
+  const [dadosOcorrenciaGerada, setDadosOcorrenciaGerada] = useState<Record<string, unknown> | null>(null);
   const [gruposSelecionados, setGruposSelecionados] = useState<{
     comunicacao: boolean;
     operacao: boolean;
@@ -637,10 +723,6 @@ export default function DespachoOcorrencias() {
   });
   const [disparandoCanal, setDisparandoCanal] = useState<string | null>(null);
 
-  /**
-   * Rastreia se o formulário de nova ocorrência foi alterado mas não salvo,
-   * para avisar o operador caso tente navegar away ou fechar a aba.
-   */
   const [formularioModificado, setFormularioModificado] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<ModalMensagemConfig>({
@@ -1072,6 +1154,8 @@ export default function DespachoOcorrencias() {
     }
 
     setLoading(true);
+    setMensagensGemini(null);
+    setDadosOcorrenciaGerada(null);
 
     try {
       let localidade = tipoLocalidade === 'estacao'
@@ -1139,6 +1223,10 @@ export default function DespachoOcorrencias() {
           : '',
         idTrem: (tipoLocalidade === 'trecho' || quemComunicou === 'trem') ? idTrem : '',
         prefixoViagem: (tipoLocalidade === 'trecho' || quemComunicou === 'trem') ? prefixoViagem : '',
+        apoioMRSCiente: prefixoDeCarga ? apoioMRSCiente : null,
+        justificativaApoioMRS: prefixoDeCarga && apoioMRSCiente === false
+          ? justificativaApoioMRS.trim()
+          : '',
         classificacoes,
         tipoIN,
         paeseAcionado,
@@ -1165,6 +1253,8 @@ export default function DespachoOcorrencias() {
       }
       const data: Mensagens = await res.json();
       setMensagens(data);
+      setMensagensGemini(data);
+      setDadosOcorrenciaGerada(dadosOcorrencia);
       setCodigoEventoAtual(null);
       setDisparoRealizado(false);
     } catch (err: unknown) {
@@ -1338,19 +1428,17 @@ export default function DespachoOcorrencias() {
     }
   };
 
-function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?: string): string {
-  return aplicarEncerramentoNaMensagem(mensagem, horaFim, horaInicio);
-}
-
   const selecionarOcorrencia = (ocorrencia: OcorrenciaDetalhe) => {
+    setMensagensGemini(null);
+    setDadosOcorrenciaGerada(null);
     setOcorrenciaSelecionada(ocorrencia);
     const horaAtual = new Date().toTimeString().slice(0, 5);
     const horaFinal = ocorrencia.hora_fim || horaAtual;
     setHoraFim(horaFinal);
     setMsgFimEditada({
-      comunicacao: aplicarEncerramentoNaMensagem(ocorrencia.msg_comunicacao, horaFinal, ocorrencia.hora_inicio),
-      operacao: aplicarEncerramentoNaMensagem(ocorrencia.msg_operacao, horaFinal, ocorrencia.hora_inicio),
-      gerencia: aplicarEncerramentoNaMensagem(ocorrencia.msg_gerencia, horaFinal, ocorrencia.hora_inicio),
+      comunicacao: aplicarModeloEncerramento('comunicacao', ocorrencia.msg_comunicacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
+      operacao: aplicarModeloEncerramento('operacao', ocorrencia.msg_operacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
+      gerencia: aplicarModeloEncerramento('gerencia', ocorrencia.msg_gerencia, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
     });
     setSucessoEncerramento('');
     setDisparoRealizado(false);
@@ -1364,9 +1452,9 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     setHoraFim(novaHora);
     if (novaHora && /^([01]\d|2[0-3]):[0-5]\d$/.test(novaHora) && ocorrenciaSelecionada) {
       setMsgFimEditada({
-        comunicacao: aplicarEncerramentoNaMensagem(ocorrenciaSelecionada.msg_comunicacao, novaHora, ocorrenciaSelecionada.hora_inicio),
-        operacao: aplicarEncerramentoNaMensagem(ocorrenciaSelecionada.msg_operacao, novaHora, ocorrenciaSelecionada.hora_inicio),
-        gerencia: aplicarEncerramentoNaMensagem(ocorrenciaSelecionada.msg_gerencia, novaHora, ocorrenciaSelecionada.hora_inicio),
+        comunicacao: aplicarModeloEncerramento('comunicacao', ocorrenciaSelecionada.msg_comunicacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+        operacao: aplicarModeloEncerramento('operacao', ocorrenciaSelecionada.msg_operacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+        gerencia: aplicarModeloEncerramento('gerencia', ocorrenciaSelecionada.msg_gerencia, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
       });
     }
   };
@@ -1418,6 +1506,15 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
 
   const handleAtualizarHorarioFim = async () => {
     if (!ocorrenciaSelecionada) return;
+    if (!carregouTemplatesEncerramento || erroTemplatesEncerramento) {
+      exibirModal({
+        tipo: 'erro',
+        titulo: 'Modelo de Encerramento Indisponível',
+        mensagem: erroTemplatesEncerramento || 'Aguarde o carregamento do modelo de encerramento antes de continuar.',
+        textoBotaoConfirmar: 'Entendi',
+      });
+      return;
+    }
     if (!horaFim || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim)) {
       exibirModal({
         tipo: 'aviso',
@@ -1433,9 +1530,9 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     setSucessoEncerramento('');
 
     const msgAtualizada = {
-      comunicacao: aplicarEncerramentoNaMensagem(msgFimEditada.comunicacao, horaFim, ocorrenciaSelecionada.hora_inicio),
-      operacao: aplicarEncerramentoNaMensagem(msgFimEditada.operacao, horaFim, ocorrenciaSelecionada.hora_inicio),
-      gerencia: aplicarEncerramentoNaMensagem(msgFimEditada.gerencia, horaFim, ocorrenciaSelecionada.hora_inicio),
+      comunicacao: aplicarModeloEncerramento('comunicacao', msgFimEditada.comunicacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+      operacao: aplicarModeloEncerramento('operacao', msgFimEditada.operacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+      gerencia: aplicarModeloEncerramento('gerencia', msgFimEditada.gerencia, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
     };
     setMsgFimEditada(msgAtualizada);
 
@@ -1531,6 +1628,39 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     }
 
     setDisparandoWpp(true);
+
+    const mensagensFinais = mensagensCompletasParaSalvar ?? textos;
+    if (
+      abaAtiva === 'ocorrencia'
+      && mensagensGemini
+      && dadosOcorrenciaGerada
+    ) {
+      const exemplos = gruposParaEnviar.flatMap((tipoGrupo) => {
+        const mensagemFinal = mensagensFinais[tipoGrupo];
+        const mensagemSugerida = mensagensGemini[tipoGrupo];
+        if (!mensagemFinal.trim()) return [];
+        return [{
+          tipo_grupo: tipoGrupo,
+          mensagem_ia: mensagemSugerida,
+          mensagem_final_sco: mensagemFinal,
+          houve_edicao: mensagemSugerida.trim() !== mensagemFinal.trim(),
+        }];
+      });
+
+      if (exemplos.length > 0) {
+        void fetch('/api/aprendizado-despachos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dadosOcorrencia: dadosOcorrenciaGerada, exemplos }),
+        }).then(async (response) => {
+          if (response.ok) return;
+          const result = await response.json().catch(() => null) as { error?: string } | null;
+          console.warn('Não foi possível salvar o feedback do despacho:', result?.error || response.statusText);
+        }).catch((feedbackError: unknown) => {
+          console.warn('Não foi possível salvar o feedback do despacho:', feedbackError);
+        });
+      }
+    }
 
     try {
       const res = await fetch('/api/disparar-wpp', {
@@ -2543,7 +2673,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                           {loadingVias ? (
                             <span className="inline-flex items-center gap-1.5 text-[11px] text-safira font-medium animate-pulse">
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              Carregando vias no Supabase...
+                              Carregando vias do banco de dados...
                             </span>
                           ) : viasDisponiveis.length > 1 ? (
                             <div className="flex items-center gap-2 text-[11px]">
@@ -2726,7 +2856,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                           {
                             id: 'trem' as const,
                             label: 'Trem',
-                            desc: 'Tripulação / Maquinista',
+                            desc: 'Tripulação / Operador de Trens',
                             icon: TrainFront,
                           },
                           {
@@ -2812,7 +2942,11 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                           type="text"
                           placeholder="Ex: E169"
                           value={prefixoViagem}
-                          onChange={(e) => setPrefixoViagem(e.target.value)}
+                          onChange={(e) => {
+                            setPrefixoViagem(e.target.value);
+                            setApoioMRSCiente(null);
+                            setJustificativaApoioMRS('');
+                          }}
                           maxLength={100}
                           className="w-full form-control"
                         />
@@ -3300,6 +3434,62 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                     </div>
                   </div>
                 </div>
+              )}
+
+              {etapaAtual.id === 'apoio-mrs' && (
+                <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3.5">
+                  <legend className="form-label px-1">Apoio da MRS</legend>
+                  <p className="text-sm text-slate-700">
+                    O Apoio da MRS está ciente da ocorrência do trem de carga ({prefixoViagem.trim().toUpperCase()})?
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {[
+                      { value: true, label: 'Sim' },
+                      { value: false, label: 'Não' },
+                    ].map((opcao) => (
+                      <label key={String(opcao.value)} className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="radio"
+                          name="apoio-mrs-ciente"
+                          checked={apoioMRSCiente === opcao.value}
+                          onChange={() => {
+                            setApoioMRSCiente(opcao.value);
+                            if (opcao.value) setJustificativaApoioMRS('');
+                          }}
+                          required
+                        />
+                        {opcao.label}
+                      </label>
+                    ))}
+                  </div>
+                  {apoioMRSCiente === null && (
+                    <p className="text-xs text-amber-800" role="status">
+                      Informe se o Apoio da MRS está ciente para gerar as mensagens.
+                    </p>
+                  )}
+                  {apoioMRSCiente === false && (
+                    <div>
+                      <label htmlFor="justificativa-apoio-mrs" className="form-label block">
+                        Justificativa
+                      </label>
+                      <textarea
+                        id="justificativa-apoio-mrs"
+                        required
+                        rows={3}
+                        maxLength={500}
+                        value={justificativaApoioMRS}
+                        onChange={(event) => setJustificativaApoioMRS(event.target.value)}
+                        placeholder="Informe por que o Apoio da MRS não está ciente."
+                        className="w-full form-control"
+                      />
+                      {!justificativaApoioMRS.trim() && (
+                        <p className="mt-1 text-xs text-amber-800" role="status">
+                          A justificativa é obrigatória para avançar.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </fieldset>
               )}
 
               {atrasoComunicacao && (
@@ -3810,15 +4000,20 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                   <button
                     type="button"
                     onClick={() => void handleAtualizarHorarioFim()}
-                    disabled={!horaFim || atualizandoHorarioFim}
+                  disabled={!horaFim || atualizandoHorarioFim || !carregouTemplatesEncerramento || Boolean(erroTemplatesEncerramento)}
                     className="btn btn-safira disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     {atualizandoHorarioFim ? 'Encerrando...' : 'Encerrar Ocorrência e Gerar Mensagens'}
                   </button>
                 </div>
+                {erroTemplatesEncerramento && (
+                  <p className="text-xs text-rose-700" role="alert">
+                    Não foi possível carregar os modelos de encerramento: {erroTemplatesEncerramento}
+                  </p>
+                )}
                 <p className="text-[11.5px] text-slate-500">
-                  Ao encerrar, a tag <strong>*ENCERRAMENTO*</strong> em negrito é inserida acima do título, e as informações de <strong>Horário de Fim</strong> e <strong>Duração</strong> são preenchidas automaticamente nas 3 mensagens formatadas.
+                  A mensagem final terá somente o título, o horário de início, o horário de fim e a duração, seguida pela assinatura do SCO.
                 </p>
               </div>
 

@@ -14,12 +14,22 @@ import {
   MessageSquare,
   Radio,
   Briefcase,
+  CheckCheck,
+  Mic,
+  MoreVertical,
+  Paperclip,
+  Search,
+  Smile,
+  TrainFront,
+  Users,
 } from 'lucide-react';
 import {
   TEMPLATES_MENSAGEM_PADRAO,
   TemplatesMensagem,
   aplicarTemplateMensagem,
+  aplicarEncerramentoNaMensagem,
   DadosTemplateMensagem,
+  modeloEncerramentoValido,
 } from '@/lib/mensagem-templates-pure';
 
 interface AdminTemplatesProps {
@@ -36,6 +46,36 @@ interface DadosTemplatesAPI {
 }
 
 type CanalGrupo = 'comunicacao' | 'operacao' | 'gerencia';
+
+function formatWhatsAppText(text: string): React.ReactNode[] {
+  const pattern = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g;
+  const partes: React.ReactNode[] = [];
+  let inicio = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > inicio) {
+      partes.push(text.slice(inicio, match.index));
+    }
+
+    const conteudo = match[0].slice(1, -1);
+    const chave = `formatado-${match.index}`;
+    if (match[0].startsWith('*')) {
+      partes.push(<strong key={chave} className="font-bold">{conteudo}</strong>);
+    } else if (match[0].startsWith('_')) {
+      partes.push(<em key={chave}>{conteudo}</em>);
+    } else {
+      partes.push(<del key={chave}>{conteudo}</del>);
+    }
+    inicio = match.index + match[0].length;
+  }
+
+  if (inicio < text.length) {
+    partes.push(text.slice(inicio));
+  }
+
+  return partes;
+}
 
 const DADOS_SIMULACAO: DadosTemplateMensagem = {
   titulo: 'DESPACHO CCO - LINHA 11-CORAL - FALHA DE TRAÇÃO',
@@ -65,7 +105,7 @@ const TAGS_DISPONIVEIS: Array<{
   desc: string;
   grupos: CanalGrupo[];
 }> = [
-  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{DATA}}', desc: 'Data do evento (DD/MM/AAAA)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{HORA_FIM}}', desc: 'Horário de fim (exibido apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
@@ -90,6 +130,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   const [salvando, setSalvando] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
   const [canalAtivo, setCanalAtivo] = useState<CanalGrupo>('operacao');
+  const [tipoModeloAtivo, setTipoModeloAtivo] = useState<'normal' | 'encerramento'>('normal');
 
   const [templatesOriginais, setTemplatesOriginais] = useState<TemplatesMensagem>({
     ...TEMPLATES_MENSAGEM_PADRAO,
@@ -104,7 +145,6 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [mostrarPreview, setMostrarPreview] = useState(true);
-  const [simularEncerramento, setSimularEncerramento] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -163,25 +203,29 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   }, [onNotificarErro]);
 
   const houveAlteracao = useMemo(() => {
-    return (
-      templatesEditados.comunicacao !== templatesOriginais.comunicacao ||
-      templatesEditados.operacao !== templatesOriginais.operacao ||
-      templatesEditados.gerencia !== templatesOriginais.gerencia
-    );
+    return JSON.stringify(templatesEditados) !== JSON.stringify(templatesOriginais);
   }, [templatesEditados, templatesOriginais]);
 
-  const textoCanalAtual = templatesEditados[canalAtivo];
+  const textoCanalAtual = tipoModeloAtivo === 'normal'
+    ? templatesEditados[canalAtivo]
+    : templatesEditados.encerramento[canalAtivo];
 
   const handleAtualizarTextoCanal = (novoTexto: string) => {
-    setTemplatesEditados((prev) => ({
-      ...prev,
-      [canalAtivo]: novoTexto,
-    }));
+    setTemplatesEditados((prev) => tipoModeloAtivo === 'normal'
+      ? { ...prev, [canalAtivo]: novoTexto }
+      : {
+        ...prev,
+        encerramento: { ...prev.encerramento, [canalAtivo]: novoTexto },
+      });
   };
 
   const handleSalvar = async () => {
-    if (!templatesEditados.operacao.trim() || !templatesEditados.gerencia.trim()) {
-      setErro('Os modelos de Operação e Gerência não podem ser vazios.');
+    if (
+      Object.values(templatesEditados).some((value) => typeof value === 'string' && !value.trim())
+      || Object.values(templatesEditados.encerramento).some((template) =>
+        !template.trim() || !modeloEncerramentoValido(template))
+    ) {
+      setErro('Todos os modelos devem estar preenchidos. Cada modelo de encerramento deve conter {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.');
       return;
     }
 
@@ -292,17 +336,41 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
   };
 
   const previewMensagem = useMemo(() => {
-    return aplicarTemplateMensagem(textoCanalAtual, {
+    const dadosPreview = {
       ...DADOS_SIMULACAO,
-      horaFim: simularEncerramento ? '15:35' : undefined,
-      duracao: simularEncerramento ? '1h 15min' : undefined,
-      isEncerramento: simularEncerramento,
-    });
-  }, [textoCanalAtual, simularEncerramento]);
+    };
+    if (tipoModeloAtivo === 'normal') {
+      return aplicarTemplateMensagem(textoCanalAtual, dadosPreview);
+    }
+    const mensagemNormal = aplicarTemplateMensagem(
+      templatesEditados[canalAtivo],
+      dadosPreview,
+    );
+    return aplicarEncerramentoNaMensagem(
+      mensagemNormal,
+      '15:35',
+      DADOS_SIMULACAO.horaInicio,
+      textoCanalAtual,
+      DADOS_SIMULACAO.titulo,
+    );
+  }, [textoCanalAtual, tipoModeloAtivo, templatesEditados, canalAtivo]);
+
+  const tituloGrupo = {
+    comunicacao: 'CCO - Comunicação Linha 11',
+    operacao: 'CCO - Operação Linha 11',
+    gerencia: 'CCO - Gerência Linha 11',
+  }[canalAtivo];
+  const horaPreview = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
 
   const tagsParaCanal = useMemo(() => {
-    return TAGS_DISPONIVEIS.filter((t) => t.grupos.includes(canalAtivo));
-  }, [canalAtivo]);
+    return TAGS_DISPONIVEIS.filter((t) =>
+      t.grupos.includes(canalAtivo)
+      && (t.tag !== '{{ENCERRAMENTO}}' || tipoModeloAtivo === 'normal')
+    );
+  }, [canalAtivo, tipoModeloAtivo]);
 
   if (carregando) {
     return (
@@ -335,7 +403,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Personalize o layout, campos e cabeçalhos enviados em cada um dos 3 grupos de WhatsApp sem alterar o código.
-            {origem === 'supabase' && ' (Sincronizado no Supabase)'}
+            {origem === 'supabase' && ' (Sincronizado no banco de dados)'}
             {origem === 'local' && ' (Persistido no servidor)'}
             {updatedAt && (
               <span className="ml-1 text-slate-400">
@@ -446,12 +514,33 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         </button>
       </div>
 
+      <div className="flex gap-2" role="group" aria-label="Tipo do modelo de mensagem">
+        {([
+          { id: 'normal', label: 'Mensagem normal' },
+          { id: 'encerramento', label: 'Mensagem de encerramento' },
+        ] as const).map((modelo) => (
+          <button
+            key={modelo.id}
+            type="button"
+            aria-pressed={tipoModeloAtivo === modelo.id}
+            onClick={() => setTipoModeloAtivo(modelo.id)}
+            className={`rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+              tipoModeloAtivo === modelo.id
+                ? 'border-safira bg-safira text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {modelo.label}
+          </button>
+        ))}
+      </div>
+
       {/* Tags Disponíveis para o Canal Selecionado */}
       <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
             <Tag className="w-3.5 h-3.5 text-safira" />
-            <span>Variáveis dinâmicas para o Grupo {canalAtivo.toUpperCase()}:</span>
+            <span>Variáveis dinâmicas para {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'mensagem de encerramento'} · Grupo {canalAtivo.toUpperCase()}:</span>
           </div>
           <button
             type="button"
@@ -487,7 +576,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-slate-500 px-1">
             <label htmlFor={`editor-template-${canalAtivo}`} className="font-semibold text-slate-700">
-              Template do Grupo {canalAtivo.toUpperCase()} (WhatsApp)
+              Modelo de {tipoModeloAtivo === 'normal' ? 'mensagem normal' : 'encerramento'} · Grupo {canalAtivo.toUpperCase()} (WhatsApp)
             </label>
             <span className="font-mono text-[11px]">
               {textoCanalAtual.split('\n').length} linhas | {textoCanalAtual.length} caracteres
@@ -515,22 +604,78 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
                 <Eye className="w-3.5 h-3.5 text-emerald-600" />
                 Pré-visualização ao vivo (Como aparecerá no WhatsApp)
               </span>
-              <button
-                type="button"
-                onClick={() => setSimularEncerramento(!simularEncerramento)}
-                className={`text-[11px] font-medium px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                  simularEncerramento
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold'
-                    : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                }`}
-                title="Alternar entre visualização de ocorrência em andamento e encerrada"
-              >
-                {simularEncerramento ? 'Simulação: Encerrada (com Hora Fim, Duração e *ENCERRAMENTO*)' : 'Simulação: Em Andamento'}
-              </button>
+              <span className="text-[11px] font-medium text-slate-500">
+                Prévia: {tipoModeloAtivo === 'normal' ? 'ocorrência em andamento' : 'ocorrência encerrada'}
+              </span>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-900 p-3.5 text-slate-100 font-mono text-xs leading-relaxed shadow-sm min-h-[300px] overflow-y-auto whitespace-pre-wrap selection:bg-safira selection:text-white">
-              {previewMensagem}
+            <div className="overflow-hidden rounded-xl border border-[#2a3942] bg-[#0b141a] shadow-lg">
+              <div className="flex items-center gap-3 bg-[#202c33] px-4 py-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-emerald-50">
+                  {canalAtivo === 'comunicacao'
+                    ? <Users className="h-5 w-5" aria-hidden="true" />
+                    : <TrainFront className="h-5 w-5" aria-hidden="true" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-semibold text-slate-100">{tituloGrupo}</h4>
+                  <p className="truncate text-xs text-slate-400">
+                    Você, Supervisão CCO, Tráfego, Manutenção...
+                  </p>
+                </div>
+                <button type="button" aria-label="Pesquisar na conversa" className="rounded-full p-2 text-slate-400">
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button type="button" aria-label="Mais opções do grupo" className="rounded-full p-2 text-slate-400">
+                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div
+                className="min-h-[300px] space-y-4 overflow-y-auto px-3 py-5 sm:px-5"
+                style={{
+                  backgroundColor: '#0b141a',
+                  backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(134, 150, 160, 0.045) 0 1px, transparent 1.5px), radial-gradient(circle at 75% 65%, rgba(134, 150, 160, 0.04) 0 1px, transparent 1.5px)',
+                  backgroundSize: '24px 24px, 32px 32px',
+                }}
+              >
+                <div className="mx-auto w-fit rounded-lg bg-[#182229]/95 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-300 shadow-sm">
+                  Hoje
+                </div>
+
+                <div className="flex justify-end">
+                  <div className="relative max-w-[95%] rounded-xl rounded-tr-sm bg-[#005c4b] px-3.5 pb-2 pt-2.5 text-[12px] leading-relaxed text-[#e9edef] shadow-sm sm:max-w-[88%]">
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 top-0 h-0 w-0 border-l-[8px] border-t-[8px] border-l-[#005c4b] border-t-transparent"
+                    />
+                    <p className="mb-1 text-[11px] font-semibold text-[#7dd3b0]">
+                      Gabriel Campagnoli (CCO)
+                    </p>
+                    <div className="whitespace-pre-wrap break-words">
+                      {formatWhatsAppText(previewMensagem)}
+                    </div>
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#b6c9c3]">
+                      <span>{horaPreview}</span>
+                      <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" aria-label="Lida" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 bg-[#202c33] px-3 py-2.5">
+                <button type="button" aria-label="Emoji" className="rounded-full p-2 text-slate-400">
+                  <Smile className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <div className="flex-1 rounded-lg bg-[#2a3942] px-3 py-2 text-xs text-slate-400">
+                  Digite uma mensagem
+                </div>
+                <button type="button" aria-label="Anexar arquivo" className="rounded-full p-2 text-slate-400">
+                  <Paperclip className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button type="button" aria-label="Gravar áudio" className="rounded-full p-2 text-slate-400">
+                  <Mic className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
         )}

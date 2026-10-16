@@ -5,21 +5,32 @@ export function normalizarSCO(valor: unknown): string {
 }
 
 export function incluirSCO(mensagem: string, sco: string): string {
-  const assinatura = `SCO: ${sco}`;
-  const linhas = mensagem.trimEnd().split(/\r?\n/);
+  const linhas = mensagem.trim().split(/\r?\n/);
+  const nome = sco.trim().toLocaleLowerCase('pt-BR');
+  const assinaturaIndex = linhas.findIndex((linha) => {
+    const normalizada = linha.trim().toLocaleLowerCase('pt-BR');
+    return normalizada === `sco: ${nome}`
+      || normalizada === `responsável: ${nome}`
+      || normalizada === `#${nome}`;
+  });
+  const mensagemBase = (assinaturaIndex >= 0 ? linhas.slice(0, assinaturaIndex) : linhas)
+    .join('\n')
+    .trimEnd();
+  return mensagemBase ? `${mensagemBase}\nSCO: ${sco}` : `SCO: ${sco}`;
+}
 
-  while (linhas.length > 0) {
-    const ultimaLinha = linhas[linhas.length - 1].trim().toLocaleLowerCase('pt-BR');
-    const nome = sco.toLocaleLowerCase('pt-BR');
+export function finalizarMensagemComAssinaturaSCO(mensagem: string): string {
+  const linhas = mensagem.trim().split(/\r?\n/);
+  const assinaturaIndex = linhas.findIndex((linha, index) => {
+    if (/^\s*(?:SCO:\s*.+|Responsável:\s*.+)\s*$/i.test(linha)) return true;
+    return /^#\s*.+$/.test(linha.trim())
+      && linhas.slice(index + 1).every((linhaSeguinte) => !linhaSeguinte.trim());
+  });
+  if (assinaturaIndex < 0) return mensagem.trim();
 
-    if (
-      ultimaLinha !== `#${nome}`
-      && ultimaLinha !== `sco: ${nome}`
-      && ultimaLinha !== `responsável: ${nome}`
-    ) break;
-    linhas.pop();
-  }
+  const assinatura = linhas[assinaturaIndex].trim();
+  const nome = assinatura.replace(/^(?:SCO|Responsável):\s*/i, '').replace(/^#\s*/, '').trim();
+  if (!nome) return linhas.slice(0, assinaturaIndex).join('\n').trimEnd();
 
-  const mensagemBase = linhas.join('\n').trimEnd();
-  return mensagemBase ? `${mensagemBase}\n${assinatura}` : assinatura;
+  return [...linhas.slice(0, assinaturaIndex), `SCO: ${nome}`].join('\n').trimEnd();
 }

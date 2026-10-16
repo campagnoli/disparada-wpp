@@ -5,7 +5,9 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import {
   TEMPLATES_MENSAGEM_PADRAO,
   CHAVE_CONFIG_TEMPLATES,
+  TemplatesGrupoMensagem,
   TemplatesMensagem,
+  modeloEncerramentoValido,
 } from './mensagem-templates-pure';
 
 export * from './mensagem-templates-pure';
@@ -13,18 +15,53 @@ export * from './mensagem-templates-pure';
 const LOCAL_CONFIG_DIR = path.join(process.cwd(), 'src', 'config');
 const LOCAL_CONFIG_FILE = path.join(LOCAL_CONFIG_DIR, 'templates-mensagem.json');
 
+function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
+  if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) return null;
+  const dados = valor as Record<string, unknown>;
+  const normal = typeof dados.normal === 'object' && dados.normal !== null
+    ? dados.normal as Record<string, unknown>
+    : dados;
+  const encerramento = typeof dados.encerramento === 'object' && dados.encerramento !== null
+    ? dados.encerramento as Record<string, unknown>
+    : {};
+  const hasTemplates = ['comunicacao', 'operacao', 'gerencia'].some(
+    (key) => typeof normal[key] === 'string' && (normal[key] as string).trim(),
+  );
+  if (!hasTemplates) return null;
+  const normalizados = (grupo: Record<string, unknown>, padrao: TemplatesGrupoMensagem): TemplatesGrupoMensagem => ({
+    comunicacao: typeof grupo.comunicacao === 'string' && grupo.comunicacao.trim()
+      ? grupo.comunicacao
+      : padrao.comunicacao,
+    operacao: typeof grupo.operacao === 'string' && grupo.operacao.trim()
+      ? grupo.operacao
+      : padrao.operacao,
+    gerencia: typeof grupo.gerencia === 'string' && grupo.gerencia.trim()
+      ? grupo.gerencia
+      : padrao.gerencia,
+  });
+  const modelosNormais = normalizados(normal, TEMPLATES_MENSAGEM_PADRAO);
+  const modelosEncerramento = normalizados(encerramento, TEMPLATES_MENSAGEM_PADRAO.encerramento);
+  for (const grupo of ['comunicacao', 'operacao', 'gerencia'] as const) {
+    if (!modeloEncerramentoValido(modelosEncerramento[grupo])) {
+      modelosEncerramento[grupo] = TEMPLATES_MENSAGEM_PADRAO.encerramento[grupo];
+    }
+  }
+
+  return { ...modelosNormais, encerramento: modelosEncerramento };
+}
+
 function lerConfigLocal(): {
-  templates?: Partial<TemplatesMensagem>;
+  templates?: unknown;
   updated_at?: string;
 } | null {
   try {
     if (fs.existsSync(LOCAL_CONFIG_FILE)) {
       const conteudo = fs.readFileSync(LOCAL_CONFIG_FILE, 'utf8');
       const json = JSON.parse(conteudo) as {
-        templates?: Partial<TemplatesMensagem>;
+        templates?: unknown;
         updated_at?: string;
       };
-      if (json.templates && typeof json.templates === 'object') {
+      if (normalizarTemplatesMensagem(json.templates)) {
         return json;
       }
     }
@@ -79,14 +116,11 @@ export async function obterTemplatesMensagemAtivos(): Promise<{
 
     if (!error && data && typeof data.valor === 'string') {
       try {
-        const parsed = JSON.parse(data.valor) as Partial<TemplatesMensagem>;
-        if (parsed.comunicacao || parsed.operacao || parsed.gerencia) {
+        const parsed: unknown = JSON.parse(data.valor);
+        const templates = normalizarTemplatesMensagem(parsed);
+        if (templates) {
           return {
-            templates: {
-              comunicacao: parsed.comunicacao ?? TEMPLATES_MENSAGEM_PADRAO.comunicacao,
-              operacao: parsed.operacao ?? TEMPLATES_MENSAGEM_PADRAO.operacao,
-              gerencia: parsed.gerencia ?? TEMPLATES_MENSAGEM_PADRAO.gerencia,
-            },
+            templates,
             isCustom: true,
             updatedAt: data.updated_at || null,
             origem: 'supabase',
@@ -103,12 +137,12 @@ export async function obterTemplatesMensagemAtivos(): Promise<{
   // 2. Tentar ler do arquivo local
   const local = lerConfigLocal();
   if (local && local.templates) {
+    const templates = normalizarTemplatesMensagem(local.templates);
+    if (!templates) {
+      throw new Error('Os modelos de mensagem locais estão inválidos.');
+    }
     return {
-      templates: {
-        comunicacao: local.templates.comunicacao ?? TEMPLATES_MENSAGEM_PADRAO.comunicacao,
-        operacao: local.templates.operacao ?? TEMPLATES_MENSAGEM_PADRAO.operacao,
-        gerencia: local.templates.gerencia ?? TEMPLATES_MENSAGEM_PADRAO.gerencia,
-      },
+      templates,
       isCustom: true,
       updatedAt: local.updated_at || null,
       origem: 'local',
@@ -133,10 +167,18 @@ export async function salvarTemplatesMensagem(novosTemplates: TemplatesMensagem)
   salvoLocalmente: boolean;
   erro?: string;
 }> {
+  if (Object.values(novosTemplates.encerramento).some((template) => !modeloEncerramentoValido(template))) {
+    throw new Error('Cada modelo de encerramento deve conter as variáveis {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.');
+  }
   const templatesNormalizados: TemplatesMensagem = {
     comunicacao: novosTemplates.comunicacao.trim() || TEMPLATES_MENSAGEM_PADRAO.comunicacao,
     operacao: novosTemplates.operacao.trim() || TEMPLATES_MENSAGEM_PADRAO.operacao,
     gerencia: novosTemplates.gerencia.trim() || TEMPLATES_MENSAGEM_PADRAO.gerencia,
+    encerramento: {
+      comunicacao: novosTemplates.encerramento.comunicacao.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.comunicacao,
+      operacao: novosTemplates.encerramento.operacao.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.operacao,
+      gerencia: novosTemplates.encerramento.gerencia.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.gerencia,
+    },
   };
 
   const jsonString = JSON.stringify(templatesNormalizados);

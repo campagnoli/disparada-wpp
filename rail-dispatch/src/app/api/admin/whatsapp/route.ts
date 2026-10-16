@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sucesso: true,
       mensagem: resultado.salvoNoBanco
-        ? 'Configurações de WhatsApp sincronizadas no Supabase com sucesso!'
+        ? 'Configurações de WhatsApp sincronizadas no banco de dados com sucesso!'
         : 'Configurações salvas no servidor local com sucesso!',
       config: dadosSalvos.config,
       isCustom: true,

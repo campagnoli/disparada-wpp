@@ -1,12 +1,27 @@
 import { incluirSCO } from '@/lib/mensagens';
 
-export interface TemplatesMensagem {
+export interface TemplatesGrupoMensagem {
   comunicacao: string;
   operacao: string;
   gerencia: string;
 }
 
+export interface TemplatesMensagem extends TemplatesGrupoMensagem {
+  encerramento: TemplatesGrupoMensagem;
+}
+
 export const CHAVE_CONFIG_TEMPLATES = 'templates_mensagens';
+export const TAGS_OBRIGATORIAS_ENCERRAMENTO = [
+  '{{TITULO}}',
+  '{{HORA_INICIO}}',
+  '{{HORA_FIM}}',
+  '{{DURACAO}}',
+] as const;
+
+export function modeloEncerramentoValido(template: string): boolean {
+  return !template.includes('{{MENSAGEM_ATUAL}}')
+    && TAGS_OBRIGATORIAS_ENCERRAMENTO.every((tag) => template.includes(tag));
+}
 
 export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
   comunicacao: `{{TEXTO_COMUNICACAO}}`,
@@ -34,6 +49,20 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
 *Falha:* {{FALHA}}
 *Impacto:* {{IMPACTO}}
 *Ações do CCO e outras áreas:* {{ACOES}}`,
+  encerramento: {
+  comunicacao: `*Título:* {{TITULO}}
+*Horário de início:* {{HORA_INICIO}}
+*Horário de fim:* {{HORA_FIM}}
+*Duração:* {{DURACAO}}`,
+  operacao: `*Título:* {{TITULO}}
+*Horário de início:* {{HORA_INICIO}}
+*Horário de fim:* {{HORA_FIM}}
+*Duração:* {{DURACAO}}`,
+  gerencia: `*Título:* {{TITULO}}
+*Horário de início:* {{HORA_INICIO}}
+*Horário de fim:* {{HORA_FIM}}
+*Duração:* {{DURACAO}}`,
+  },
 };
 
 export interface DadosTemplateMensagem {
@@ -53,6 +82,7 @@ export interface DadosTemplateMensagem {
   impacto?: string;
   acoes?: string;
   textoComunicacao?: string;
+  mensagemAtual?: string;
   sco?: string;
   informante?: string;
   linha?: string;
@@ -196,6 +226,7 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   texto = texto.replaceAll('{{IMPACTO}}', dados.impacto ?? '');
   texto = texto.replaceAll('{{ACOES}}', dados.acoes ?? '');
   texto = texto.replaceAll('{{TEXTO_COMUNICACAO}}', dados.textoComunicacao ?? '');
+  texto = texto.replaceAll('{{MENSAGEM_ATUAL}}', dados.mensagemAtual ?? '');
   texto = texto.replaceAll('{{LINHA}}', dados.linha ?? '');
   texto = texto.replaceAll('{{VIA}}', dados.via ?? '');
   texto = texto.replaceAll('{{ID_TREM}}', dados.idTrem ?? '');
@@ -220,119 +251,61 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
       .join('\n');
   }
 
-  if (texto.includes('{{SCO}}') || texto.includes('{{INFORMANTE}}')) {
-    const assinatura = scoValor ? `SCO: ${scoValor.trim()}` : '';
-    texto = texto
-      .replaceAll('{{SCO}}', assinatura)
-      .replaceAll('{{INFORMANTE}}', assinatura);
-  } else if (scoValor) {
-    texto = incluirSCO(texto, scoValor.trim());
-  }
+  texto = texto
+    .replaceAll('{{SCO}}', '')
+    .replaceAll('{{INFORMANTE}}', '');
+  if (scoValor) texto = incluirSCO(texto, scoValor.trim());
 
   texto = texto.replace(/\n{3,}/g, '\n\n').trim();
 
   return texto;
 }
 
-/**
- * Aplica os dados de encerramento em uma mensagem já existente:
- * 1. Insere "*ENCERRAMENTO*" em negrito acima do título (se ainda não existir).
- * 2. Atualiza ou insere o "Horário de fim: HH:MM".
- * 3. Atualiza ou insere a "Duração: Xh Ymin" calculada entre início e fim.
- */
+/** Aplica um modelo de encerramento à mensagem em andamento e mantém a assinatura ao final. */
 export function aplicarEncerramentoNaMensagem(
   mensagem: string,
   horaFim: string,
-  horaInicio?: string
+  horaInicio?: string,
+  templateEncerramento?: string,
+  tituloFallback?: string
 ): string {
   if (!mensagem) return '';
   if (!horaFim) return mensagem;
 
-  let texto = mensagem;
+  const linhasOriginais = mensagem.split('\n');
+  const assinaturaIndex = linhasOriginais.findIndex((linha, index) => {
+    if (/^[ \t]*(?:SCO:\s*.+|Responsável:\s*.+)[ \t]*$/i.test(linha)) return true;
+    return /^#\s*.+$/.test(linha.trim())
+      && linhasOriginais.slice(index + 1).every((linhaSeguinte) => !linhaSeguinte.trim());
+  });
+  const titulo = linhasOriginais
+    .map((linha) => linha.match(/^\s*\*?T[íi]tulo:?\*?\s*(.+?)\s*$/i)?.[1]?.trim())
+    .find(Boolean)
+    || tituloFallback
+    || '';
+  const inicio = horaInicio
+    || linhasOriginais
+      .map((linha) => linha.match(/^\s*\*?Hor[áa]rio (?:de )?in[íi]cio:?\*?\s*([0-2]?\d:[0-5]\d)/i)?.[1])
+      .find(Boolean)
+    || linhasOriginais
+      .map((linha) => linha.match(/^\s*Hora Inicio:?\s*([0-2]?\d:[0-5]\d)/i)?.[1])
+      .find(Boolean)
+    || '';
+  const assinatura = assinaturaIndex >= 0
+    ? linhasOriginais[assinaturaIndex].trim()
+    .replace(/^(?:SCO|Responsável):\s*/i, '')
+    .replace(/^#\s*/, '')
+    : '';
+  const template = templateEncerramento || `*Título:* {{TITULO}}
+*Horário de início:* {{HORA_INICIO}}
+*Horário de fim:* {{HORA_FIM}}
+*Duração:* {{DURACAO}}`;
 
-  // 1. Inserir ou garantir *ENCERRAMENTO* em negrito acima do título
-  if (!/\*ENCERRAMENTO\*/i.test(texto)) {
-    const padraoTitulo = /^(\s*\*?(?:T[íi]tulo|Ocorr[êe]ncia):?[^\r\n]*)/im;
-    const matchTitulo = texto.match(padraoTitulo);
-    if (matchTitulo && matchTitulo.index !== undefined) {
-      const antes = texto.slice(0, matchTitulo.index);
-      const resto = texto.slice(matchTitulo.index);
-      texto = `${antes}*ENCERRAMENTO*\n${resto}`;
-    } else {
-      texto = `*ENCERRAMENTO*\n${texto}`;
-    }
-  }
-
-  // 2. Extrair hora de início caso não tenha sido informada
-  let hInicio = horaInicio;
-  if (!hInicio) {
-    const matchInicio = texto.match(/\*?Hor[áa]rio (?:de )?in[íi]cio:?\*?\s*([0-2]?\d:[0-5]\d)/i)
-      || texto.match(/Hora Inicio:?\s*([0-2]?\d:[0-5]\d)/i);
-    if (matchInicio) {
-      hInicio = matchInicio[1];
-    }
-  }
-
-  // 3. Calcular duração
-  const duracao = calcularDuracao(hInicio, horaFim);
-
-  // 4. Inserir ou atualizar Horário de Fim e Duração
-  const usaAsterisco = /\*Hor[áa]rio (?:de )?in[íi]cio:\*/i.test(texto) || /\*T[íi]tulo:\*/i.test(texto);
-  const padraoHoraFim = /\*?Hor[áa]rio (?:de )?(?:fim|encerramento):?\*?[^\r\n]*/i;
-  const padraoHoraFimSimples = /Hora Fim:?[^\r\n]*/i;
-  const padraoDuracao = /\*?Dura[çc][ãa]o:?\*?[^\r\n]*/i;
-
-  const linhaHoraFim = usaAsterisco ? `*Horário de fim:* ${horaFim}` : `Hora Fim: ${horaFim}`;
-  const linhaDuracao = duracao ? (usaAsterisco ? `*Duração:* ${duracao}` : `Duração: ${duracao}`) : '';
-
-  const jaTemHoraFim = padraoHoraFim.test(texto) || padraoHoraFimSimples.test(texto);
-  const jaTemDuracao = padraoDuracao.test(texto);
-
-  // Se já tem Hora Fim na mensagem, atualiza-a
-  if (padraoHoraFim.test(texto)) {
-    texto = texto.replace(padraoHoraFim, linhaHoraFim);
-  } else if (padraoHoraFimSimples.test(texto)) {
-    texto = texto.replace(padraoHoraFimSimples, linhaHoraFim);
-  }
-
-  // Se já tem Duração na mensagem, atualiza-a
-  if (jaTemDuracao) {
-    if (linhaDuracao) {
-      texto = texto.replace(padraoDuracao, linhaDuracao);
-    } else {
-      texto = texto.split('\n').filter((l) => !padraoDuracao.test(l)).join('\n');
-    }
-  }
-
-  // Se NÃO tinha Hora Fim, insere no local correto
-  if (!jaTemHoraFim) {
-    const blocoFimEDuracao = linhaDuracao ? `${linhaHoraFim}\n${linhaDuracao}` : linhaHoraFim;
-
-    // Tenta inserir logo após Horário de Início
-    const padraoInicioLinha = /(\*?Hor[áa]rio (?:de )?in[íi]cio:?\*?[^\r\n]*|Hora Inicio:?[^\r\n]*)/i;
-    const matchInicioLinha = texto.match(padraoInicioLinha);
-    if (matchInicioLinha && matchInicioLinha.index !== undefined) {
-      const pos = matchInicioLinha.index + matchInicioLinha[0].length;
-      texto = `${texto.slice(0, pos)}\n${blocoFimEDuracao}${texto.slice(pos)}`;
-    } else {
-      // Se não tem início, tenta antes de Responsável:
-      const matchAssinatura = texto.match(/\r?\n(Responsável:.*)$/i);
-      if (matchAssinatura && matchAssinatura.index !== undefined) {
-        const antes = texto.slice(0, matchAssinatura.index).trimEnd();
-        const assinatura = matchAssinatura[1];
-        texto = `${antes}\n${blocoFimEDuracao}\n${assinatura}`;
-      } else {
-        texto = `${texto.trimEnd()}\n${blocoFimEDuracao}`;
-      }
-    }
-  } else if (!jaTemDuracao && linhaDuracao) {
-    // Tinha Hora Fim mas não tinha Duração: insere Duração logo após a linha de Hora Fim
-    const matchFim = texto.match(padraoHoraFim) || texto.match(padraoHoraFimSimples);
-    if (matchFim && matchFim.index !== undefined) {
-      const pos = matchFim.index + matchFim[0].length;
-      texto = `${texto.slice(0, pos)}\n${linhaDuracao}${texto.slice(pos)}`;
-    }
-  }
-
-  return texto;
+  return aplicarTemplateMensagem(template, {
+    titulo,
+    horaInicio: inicio,
+    horaFim,
+    duracao: calcularDuracao(inicio, horaFim),
+    sco: assinatura,
+  });
 }

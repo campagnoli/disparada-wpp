@@ -20,6 +20,7 @@ rail-dispatch/
 │   │   │   │   ├── session/route.ts     # Login/logout e verificação de sessão admin
 │   │   │   │   ├── templates/route.ts   # Gestão dinâmica dos modelos de mensagens
 │   │   │   │   └── whatsapp/route.ts    # Configuração dinâmica da Evolution API
+│   │   │   ├── aprendizado-despachos/route.ts # Persistência do feedback do SCO
 │   │   │   ├── disparar-wpp/route.ts    # Despacho de mensagens via Evolution API v2
 │   │   │   ├── estacoes/route.ts        # Consulta de estações por linha
 │   │   │   ├── gerar-mensagens/route.ts # Geração de 3 mensagens via Gemini API
@@ -35,7 +36,7 @@ rail-dispatch/
 │   ├── proxy.ts                         # Proteção global por sessão operacional (Next.js 16)
 │   ├── config/
 │   │   ├── prompt-gemini.json           # Template base do prompt de sistema do Gemini
-│   │   └── templates-mensagem.json      # Modelos padrão dos 3 canais de mensagens CCO
+│   │   └── templates-mensagem.json      # Modelos padrão e de encerramento dos 3 canais CCO
 │   └── lib/
 │       ├── admin.ts                     # Criptografia, HMAC e validação de sessão admin
 │       ├── classificacao-ocorrencia.ts  # Tipos e formatadores de IN, COPESE e Desembarque
@@ -53,6 +54,11 @@ rail-dispatch/
 ├── next.config.ts                       # Configuração Turbopack e Next.js
 └── package.json                         # Dependências e scripts
 ```
+
+As versões originais geradas pelo Gemini e as mensagens finais aprovadas pelo SCO são
+registradas na tabela `aprendizado_despachos` no disparo. As mensagens editadas são usadas
+como exemplos de estilo em gerações posteriores. A tabela é acessada somente pelo servidor
+com `SUPABASE_SERVICE_ROLE_KEY`.
 
 ---
 
@@ -116,6 +122,8 @@ A plataforma conta com um sistema universal de tratamento humanizado de erros. A
 | **Impacto Maior que 500 Caracteres** | Descrição do impacto padrão de uma falha excede o limite permitido pelo schema. | *Linha X: o impacto ultrapassa 500 caracteres.* | Reduza o texto do impacto para até 500 caracteres antes de importar. |
 | **Colunas Ausentes no CSV** | Cabeçalho do arquivo não inclui `Falha` / `Descrição` e `Impacto`. | *Colunas obrigatórias não localizadas.* | Baixe o modelo oficial clicando em "Baixar modelo CSV" no painel. |
 | **Edição de Modelos e Prompt** | Salva regras e modelos de mensagens diretamente pela interface web sem mexer em código-fonte. | *Salvo com Sucesso* | Os novos templates passam a valer instantaneamente para os despachos subsequentes. |
+| **Modelos Normal e de Encerramento** | Permite editar separadamente as mensagens normais e os modelos de encerramento para Comunicação, Operação e Gerência. | Os modelos de encerramento usam `{{TITULO}}`, `{{HORA_INICIO}}`, `{{HORA_FIM}}` e `{{DURACAO}}`. | As mensagens encerradas exibem apenas esses quatro dados e mantêm a assinatura do SCO como última linha. |
+| **Apoio da MRS em Trem de Carga** | Prefixos com três letras e quatro números solicitam confirmação; se a resposta for “Não”, justificativa de até 500 caracteres é obrigatória e incluída no despacho. | A confirmação e a justificativa ficam antes da assinatura do SCO. | Registre a ciência ou o motivo informado antes de gerar as mensagens. |
 
 ### 4. Integração de Mensagens e Disparo (WhatsApp / Evolution API v2)
 
@@ -124,4 +132,4 @@ A plataforma conta com um sistema universal de tratamento humanizado de erros. A
 | **Salvamento Automático no Histórico** | Ao disparar mensagens (em lote ou canal individual), a ocorrência é gravada/atualizada automaticamente no Supabase e associada ao `codigo_evento`. | O operador não precisa lembrar de salvar manualmente; o sistema exibe o ID gerado e atualiza a listagem. |
 | **Painel de Configuração Web** | URL da Evolution, API Key, nome da instância, IDs dos 3 grupos e tempos anti-bloqueio editáveis na aba Administração. | Permite troca de instâncias, números e ajustes de proteção sem necessidade de deploy ou acesso ao servidor. |
 | **Mecanismo Anti-Bloqueio** | Simulação visual de status `"digitando..."` e pausas aleatórias inteligentes entre despachos de grupos. | Protege o número institucional contra detecções de spam pelo WhatsApp. |
-| **Encerramento e Duração** | No encerramento da ocorrência, o sistema calcula a duração total (ex: `1h 25min`) e adiciona `*ENCERRAMENTO*` em negrito. | Garante conformidade com o padrão CCO e clareza para passageiros, imprensa e diretoria. |
+| **Encerramento e Duração** | No encerramento da ocorrência, o sistema aplica o modelo específico, calcula a duração total (ex: `1h 25min`) e mantém a assinatura do SCO no final. | A mensagem de encerramento contém somente o título, os horários de início e fim, a duração e a assinatura do SCO. |

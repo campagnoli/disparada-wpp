@@ -5,6 +5,7 @@ import {
   salvarTemplatesMensagem,
   restaurarTemplatesPadrao,
   TEMPLATES_MENSAGEM_PADRAO,
+  modeloEncerramentoValido,
   TemplatesMensagem,
 } from '@/lib/mensagem-templates';
 
@@ -83,6 +84,17 @@ export async function POST(request: NextRequest) {
   }
 
   const rawTemplates = payload.templates as Record<string, unknown>;
+  const rawEncerramento = typeof rawTemplates.encerramento === 'object' && rawTemplates.encerramento !== null
+    ? rawTemplates.encerramento as Record<string, unknown>
+    : {};
+  if (['comunicacao', 'operacao', 'gerencia'].some((grupo) =>
+    typeof rawEncerramento[grupo] !== 'string' || !rawEncerramento[grupo].trim()
+  )) {
+    return NextResponse.json(
+      { error: 'Informe os modelos de encerramento para Comunicação, Operação e Gerência.' },
+      { status: 400 }
+    );
+  }
 
   const novosTemplates: TemplatesMensagem = {
     comunicacao:
@@ -97,7 +109,28 @@ export async function POST(request: NextRequest) {
       typeof rawTemplates.gerencia === 'string' && rawTemplates.gerencia.trim().length > 0
         ? rawTemplates.gerencia.trim()
         : TEMPLATES_MENSAGEM_PADRAO.gerencia,
+    encerramento: {
+      comunicacao:
+        typeof rawEncerramento.comunicacao === 'string' && rawEncerramento.comunicacao.trim().length > 0
+          ? rawEncerramento.comunicacao.trim()
+          : TEMPLATES_MENSAGEM_PADRAO.encerramento.comunicacao,
+      operacao:
+        typeof rawEncerramento.operacao === 'string' && rawEncerramento.operacao.trim().length > 0
+          ? rawEncerramento.operacao.trim()
+          : TEMPLATES_MENSAGEM_PADRAO.encerramento.operacao,
+      gerencia:
+        typeof rawEncerramento.gerencia === 'string' && rawEncerramento.gerencia.trim().length > 0
+          ? rawEncerramento.gerencia.trim()
+          : TEMPLATES_MENSAGEM_PADRAO.encerramento.gerencia,
+    },
   };
+
+  if (Object.values(novosTemplates.encerramento).some((template) => !modeloEncerramentoValido(template))) {
+    return NextResponse.json(
+      { error: 'Cada modelo de encerramento deve conter as variáveis {{TITULO}}, {{HORA_INICIO}}, {{HORA_FIM}} e {{DURACAO}}.' },
+      { status: 400 }
+    );
+  }
 
   try {
     const resultado = await salvarTemplatesMensagem(novosTemplates);
@@ -105,7 +138,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sucesso: true,
       mensagem: resultado.salvoNoBanco
-        ? 'Modelos de mensagem sincronizados com sucesso no Supabase!'
+        ? 'Modelos de mensagem sincronizados com sucesso no banco de dados!'
         : 'Modelos de mensagem salvos com sucesso no servidor!',
       templates: novosTemplates,
       isCustom: true,
