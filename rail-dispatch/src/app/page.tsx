@@ -3682,6 +3682,28 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
 
           {erroHistorico && <p className="mb-3 text-sm text-rose-700" role="alert">{erroHistorico}</p>}
 
+          {/* Botão de exclusão (visível quando há seleção) */}
+          {ocorrenciasSelecionadasExclusao.size > 0 && (
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={abrirModalExclusao}
+                disabled={excluindoOcorrencias}
+                className="btn btn-secondary btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir {ocorrenciasSelecionadasExclusao.size} selecionada{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOcorrenciasSelecionadasExclusao(new Set())}
+                className="text-xs text-slate-500 hover:text-safira underline"
+              >
+                Limpar seleção
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handlePesquisarOcorrencia} className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label htmlFor="codigo-evento" className="form-label block">Pesquisar por ID do evento</label>
@@ -4007,20 +4029,20 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               <thead>
                 <tr>
                   <th className="w-8">
-                    {ocorrenciasSelecionadasExclusao.size > 0 ? (
-                      <input
-                        type="checkbox"
-                        checked={historico.every((item) => item.codigo_evento && ocorrenciasSelecionadasExclusao.has(item.codigo_evento)) && historico.length > 0}
-                        onChange={toggleSelecaoTodasExclusao}
-                        className="rounded border-slate-300 text-safira focus:ring-safira"
-                      />
-                    ) : (
-                      <input
-                        type="checkbox"
-                        onChange={toggleSelecaoTodasExclusao}
-                        className="rounded border-slate-300 text-safira focus:ring-safira"
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      defaultChecked={false}
+                      checked={
+                        historico.length > 0 &&
+                        historico.every(
+                          (item) =>
+                            item.codigo_evento &&
+                            ocorrenciasSelecionadasExclusao.has(item.codigo_evento)
+                        )
+                      }
+                      onChange={toggleSelecaoTodasExclusao}
+                      className="rounded border-slate-300 text-safira focus:ring-safira"
+                    />
                   </th>
                   <th>ID do evento</th>
                   <th>Início</th>
@@ -4131,17 +4153,6 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             <p className="text-sm text-slate-600" aria-live="polite">
               Página {paginaHistorico} de {Math.max(1, Math.ceil(totalHistorico / 10))}
             </p>
-            {ocorrenciasSelecionadasExclusao.size > 0 && (
-              <button
-                type="button"
-                onClick={abrirModalExclusao}
-                disabled={excluindoOcorrencias}
-                className="btn btn-rose btn-sm flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Excluir {ocorrenciasSelecionadasExclusao.size} selecionada{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
-              </button>
-            )}
             <button
               type="button"
               onClick={() => void carregarHistorico(paginaHistorico + 1)}
@@ -4405,7 +4416,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                 type="button"
                 onClick={avancarEtapaExclusao}
                 disabled={excluindoOcorrencias}
-                className="btn btn-rose btn-sm disabled:opacity-50"
+                className="btn btn-secondary btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 disabled:opacity-50"
               >
                 {excluindoOcorrencias ? 'Processando...' : etapaExclusao === 3 ? 'Confirmar Exclusão' : 'Próxima etapa'}
               </button>
