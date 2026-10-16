@@ -34,6 +34,10 @@ import {
   TrainFront,
   Headphones,
   Megaphone,
+  Trash2,
+  User,
+  Calendar,
+  Lock,
 } from 'lucide-react';
 import { isModeloGemini, modelosGemini, type ModeloGemini } from '@/lib/gemini-models';
 import { opcoesClassificacao, definicoesTiposIN } from '@/lib/classificacao-ocorrencia';
@@ -594,6 +598,18 @@ export default function DespachoOcorrencias() {
   });
   const [sucessoEncerramento, setSucessoEncerramento] = useState('');
   const [disparoRealizado, setDisparoRealizado] = useState(false);
+
+  /**
+   * Estados para exclusão de ocorrências (validador triplo)
+   */
+  const [ocorrenciasSelecionadasExclusao, setOcorrenciasSelecionadasExclusao] = useState<
+    Set<string>
+  >(new Set());
+  const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
+  const [etapaExclusao, setEtapaExclusao] = useState<1 | 2 | 3>(1);
+  const [nomeExclusao, setNomeExclusao] = useState('');
+  const [dataExclusao, setDataExclusao] = useState('');
+  const [excluindoOcorrencias, setExcluindoOcorrencias] = useState(false);
   const [disparandoWpp, setDisparandoWpp] = useState(false);
   const [codigoEventoAtual, setCodigoEventoAtual] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<Mensagens>({
@@ -1632,6 +1648,161 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
     navigator.clipboard.writeText(texto);
     setCopiado(chave);
     setTimeout(() => setCopiado(null), 2000);
+  };
+
+  /**
+   * Alterna seleção de ocorrência para exclusão
+   */
+  const toggleSelecaoExclusao = (codigoEvento: string) => {
+    setOcorrenciasSelecionadasExclusao((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(codigoEvento)) {
+        novo.delete(codigoEvento);
+      } else {
+        novo.add(codigoEvento);
+      }
+      return novo;
+    });
+  };
+
+  /**
+   * Seleciona/deseleciona todas as ocorrências visíveis na página
+   */
+  const toggleSelecaoTodasExclusao = () => {
+    const codigosVisiveis = historico
+      .map((item) => item.codigo_evento)
+      .filter((c): c is string => Boolean(c));
+    setOcorrenciasSelecionadasExclusao((prev) => {
+      const todosSelecionados = codigosVisiveis.every((c) => prev.has(c));
+      const novo = new Set(prev);
+      if (todosSelecionados) {
+        codigosVisiveis.forEach((c) => novo.delete(c));
+      } else {
+        codigosVisiveis.forEach((c) => novo.add(c));
+      }
+      return novo;
+    });
+  };
+
+  /**
+   * Abre o modal de exclusão (etapa 1 de 3)
+   */
+  const abrirModalExclusao = () => {
+    if (ocorrenciasSelecionadasExclusao.size === 0) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Nenhuma ocorrência selecionada',
+        mensagem: 'Selecione ao menos uma ocorrência na tabela antes de excluir.',
+        textoBotaoConfirmar: 'OK',
+      });
+      return;
+    }
+    setEtapaExclusao(1);
+    setNomeExclusao('');
+    setDataExclusao('');
+    setModalExclusaoAberto(true);
+  };
+
+  /**
+   * Avança para a próxima etapa do validador de exclusão
+   */
+  const avancarEtapaExclusao = () => {
+    if (etapaExclusao === 1) {
+      setEtapaExclusao(2);
+    } else if (etapaExclusao === 2) {
+      setEtapaExclusao(3);
+    } else {
+      executarExclusao();
+    }
+  };
+
+  /**
+   * Executa a exclusão após validação tripla
+   */
+  const executarExclusao = async () => {
+    if (etapaExclusao !== 3) return;
+
+    // Valida nome preenchido
+    if (!nomeExclusao.trim()) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Nome obrigatório',
+        mensagem: 'Informe o nome de quem está realizando a exclusão.',
+        textoBotaoConfirmar: 'OK',
+      });
+      return;
+    }
+
+    // Valida data preenchida e no formato correto (YYYY-MM-DD)
+    const dataRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dataExclusao.trim() || !dataRegex.test(dataExclusao.trim())) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Data inválida',
+        mensagem: 'Informe a data no formato AAAA-MM-DD (ex: 2026-10-15).',
+        textoBotaoConfirmar: 'OK',
+      });
+      return;
+    }
+
+    // Valida que a data não é futura
+    const dataInformada = new Date(dataExclusao.trim());
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    if (dataInformada > hoje) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Data não permitida',
+        mensagem: 'A data informada não pode ser futura.',
+        textoBotaoConfirmar: 'OK',
+      });
+      return;
+    }
+
+    setExcluindoOcorrencias(true);
+    setModalExclusaoAberto(false);
+
+    try {
+      const codigos = Array.from(ocorrenciasSelecionadasExclusao);
+      const res = await fetch('/api/ocorrencias', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigos_evento: codigos }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        sucesso?: boolean;
+        excluidas?: number;
+        codigos?: string[];
+        error?: string;
+      } | null;
+
+      if (!res.ok || !data?.sucesso) {
+        throw new Error(data?.error || 'Falha ao excluir ocorrências.');
+      }
+
+      setOcorrenciasSelecionadasExclusao(new Set());
+      setEtapaExclusao(1);
+      setNomeExclusao('');
+      setDataExclusao('');
+
+      await carregarHistorico(paginaHistorico);
+
+      exibirModal({
+        tipo: 'sucesso',
+        titulo: 'Ocorrências excluídas',
+        mensagem: `${data.excluidas} ocorrência${
+          data.excluidas !== 1 ? 's' : ''
+        } excluída${
+          data.excluidas !== 1 ? 's' : ''
+        } com sucesso por **${nomeExclusao.trim()}** em ${dataExclusao.trim()}.`,
+        textoBotaoConfirmar: 'OK',
+      });
+    } catch (error: unknown) {
+      exibirErro(error, 'Exclusão de Ocorrências');
+    } finally {
+      setExcluindoOcorrencias(false);
+    }
   };
 
   /**
@@ -3835,6 +4006,22 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             <table className="table w-full text-left">
               <thead>
                 <tr>
+                  <th className="w-8">
+                    {ocorrenciasSelecionadasExclusao.size > 0 ? (
+                      <input
+                        type="checkbox"
+                        checked={historico.every((item) => item.codigo_evento && ocorrenciasSelecionadasExclusao.has(item.codigo_evento)) && historico.length > 0}
+                        onChange={toggleSelecaoTodasExclusao}
+                        className="rounded border-slate-300 text-safira focus:ring-safira"
+                      />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        onChange={toggleSelecaoTodasExclusao}
+                        className="rounded border-slate-300 text-safira focus:ring-safira"
+                      />
+                    )}
+                  </th>
                   <th>ID do evento</th>
                   <th>Início</th>
                   <th>Fim</th>
@@ -3849,7 +4036,7 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
               <tbody>
                 {historico.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-6 text-center text-slate-500">
+                    <td colSpan={10} className="py-6 text-center text-slate-500">
                       {carregandoHistorico ? 'Carregando histórico...' : 'Nenhuma ocorrência registrada.'}
                     </td>
                   </tr>
@@ -3858,6 +4045,14 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
                     const encerrada = item.status === 'encerrada';
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="w-8">
+                          <input
+                            type="checkbox"
+                            checked={item.codigo_evento ? ocorrenciasSelecionadasExclusao.has(item.codigo_evento) : false}
+                            onChange={() => toggleSelecaoExclusao(item.codigo_evento || '')}
+                            className="rounded border-slate-300 text-safira focus:ring-safira"
+                          />
+                        </td>
                         <td className="font-mono font-medium text-safira">
                           {item.codigo_evento || '-'}
                         </td>
@@ -3936,6 +4131,17 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             <p className="text-sm text-slate-600" aria-live="polite">
               Página {paginaHistorico} de {Math.max(1, Math.ceil(totalHistorico / 10))}
             </p>
+            {ocorrenciasSelecionadasExclusao.size > 0 && (
+              <button
+                type="button"
+                onClick={abrirModalExclusao}
+                disabled={excluindoOcorrencias}
+                className="btn btn-rose btn-sm flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir {ocorrenciasSelecionadasExclusao.size} selecionada{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void carregarHistorico(paginaHistorico + 1)}
@@ -4087,6 +4293,126 @@ function aplicarHoraFimNaMensagem(mensagem: string, horaFim: string, horaInicio?
             </div>
           </div>
         )}
+
+      {/* Modal de Validação Tripla - Exclusão de Ocorrências */}
+      {modalExclusaoAberto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 transition-opacity duration-200"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setModalExclusaoAberto(false);
+          }}
+        >
+          <div className="relative w-full max-w-md bg-white rounded-md shadow-sm border border-slate-300 overflow-hidden">
+            <div className="bg-rose-50 border-b border-rose-200 p-4">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                Exclusão de Ocorrências - Etapa {etapaExclusao} de 3
+              </h3>
+              <p className="text-sm text-slate-600 mt-1">
+                {ocorrenciasSelecionadasExclusao.size} ocorrência{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''} selecionada{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            <div className="p-6">
+              {/* Etapa 1 - Confirmação inicial */}
+              {etapaExclusao === 1 && (
+                <div className="space-y-4">
+                  <p className="text-slate-700">
+                    Tem certeza de que deseja excluir{' '}
+                    <span className="font-semibold text-rose-600">
+                      {ocorrenciasSelecionadasExclusao.size} ocorrência{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
+                    </span>{' '}
+                    do histórico? Esta ação é irreversível.
+                  </p>
+                  <div className="bg-rose-50 border border-rose-200 rounded-md p-3 text-xs text-rose-800">
+                    Aviso: Todas as mensagens e dados dessas ocorrências serão permanentemente removidos.
+                  </div>
+                </div>
+              )}
+
+              {/* Etapa 2 - Confirmação final */}
+              {etapaExclusao === 2 && (
+                <div className="space-y-4">
+                  <p className="text-slate-700">
+                    Confirma a exclusão permanente de{' '}
+                    <span className="font-semibold text-rose-600">
+                      {ocorrenciasSelecionadasExclusao.size} ocorrência{ocorrenciasSelecionadasExclusao.size !== 1 ? 's' : ''}
+                    </span>?{' '}
+                    <span className="font-semibold text-rose-600">Não será possível desfazer.</span>
+                  </p>
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-800">
+                    Dica: Após esta etapa, você precisará informar nome e data para validação final.
+                  </div>
+                </div>
+              )}
+
+              {/* Etapa 3 - Validador com nome e data */}
+              {etapaExclusao === 3 && (
+                <div className="space-y-4">
+                  <p className="text-slate-700">
+                    Para validar a exclusão, informe seu nome e a data de hoje:
+                  </p>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Nome de quem está apagando
+                    </label>
+                    <input
+                      type="text"
+                      value={nomeExclusao}
+                      onChange={(e) => setNomeExclusao(e.target.value)}
+                      placeholder="Ex: João Silva"
+                      className="w-full form-control text-xs"
+                      maxLength={100}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Data (AAAA-MM-DD)
+                    </label>
+                    <input
+                      type="date"
+                      value={dataExclusao}
+                      onChange={(e) => setDataExclusao(e.target.value)}
+                      className="w-full form-control text-xs"
+                    />
+                    <p className="text-xs text-slate-500">
+                      A data não pode ser futura. Se estiver incorreta, a exclusão será cancelada.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-200 p-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (etapaExclusao === 1) {
+                    setModalExclusaoAberto(false);
+                    setOcorrenciasSelecionadasExclusao(new Set());
+                  } else {
+                    setEtapaExclusao((etapaExclusao - 1) as 1 | 2 | 3);
+                  }
+                }}
+                disabled={excluindoOcorrencias}
+                className="btn btn-secondary btn-sm disabled:opacity-50"
+              >
+                {etapaExclusao === 1 ? 'Cancelar' : 'Voltar'}
+              </button>
+              <button
+                type="button"
+                onClick={avancarEtapaExclusao}
+                disabled={excluindoOcorrencias}
+                className="btn btn-rose btn-sm disabled:opacity-50"
+              >
+                {excluindoOcorrencias ? 'Processando...' : etapaExclusao === 3 ? 'Confirmar Exclusão' : 'Próxima etapa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
 

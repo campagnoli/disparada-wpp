@@ -302,3 +302,65 @@ export async function PATCH(request: Request) {
 		return NextResponse.json({ error: 'Não foi possível atualizar a ocorrência.' }, { status: 500 });
 	}
 }
+
+export async function DELETE(request: Request) {
+	let body: unknown;
+
+	try {
+		body = await request.json();
+	} catch {
+		return NextResponse.json({ error: 'Corpo da requisição inválido.' }, { status: 400 });
+	}
+
+	if (!isRecord(body)) {
+		return NextResponse.json({ error: 'Dados inválidos para exclusão.' }, { status: 400 });
+	}
+
+	const { codigos_evento } = body;
+
+	if (!Array.isArray(codigos_evento) || codigos_evento.length === 0) {
+		return NextResponse.json(
+			{ error: 'Informe ao menos um ID de evento para exclusão.' },
+			{ status: 400 }
+		);
+	}
+
+	const codigosLimpos = codigos_evento
+		.map((c) => (typeof c === 'string' ? c.trim().toUpperCase() : ''))
+		.filter(Boolean);
+
+	if (codigosLimpos.length === 0) {
+		return NextResponse.json(
+			{ error: 'Nenhum ID de evento válido informado.' },
+			{ status: 400 }
+		);
+	}
+
+	try {
+		const { data, error } = await supabase
+			.from('ocorrencias')
+			.delete()
+			.in('codigo_evento', codigosLimpos)
+			.select('codigo_evento');
+
+		if (error) {
+			console.error('Falha ao excluir ocorrências no Supabase:', error.message);
+			return NextResponse.json(
+				{ error: 'Não foi possível excluir as ocorrências.' },
+				{ status: 500 }
+			);
+		}
+
+		return NextResponse.json({
+			sucesso: true,
+			excluidas: data?.length ?? 0,
+			codigos: data?.map((item) => item.codigo_evento) ?? [],
+		});
+	} catch (error: unknown) {
+		console.error('Erro inesperado ao excluir ocorrências:', error);
+		return NextResponse.json(
+			{ error: 'Falha inesperada ao excluir ocorrências.' },
+			{ status: 500 }
+		);
+	}
+}
