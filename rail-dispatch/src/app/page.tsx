@@ -57,6 +57,7 @@ import {
   validarViasOcorrencia,
 } from '@/lib/vias';
 import { SeletorEstacao } from '@/components/seletor-estacao';
+import { ComboboxTrem } from '@/components/combobox-trem';
 
 export interface ItemLoop {
   id: string;
@@ -2915,14 +2916,14 @@ export default function DespachoOcorrencias() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label htmlFor="id-trem" className="form-label block">ID do trem</label>
-                        <input
+                        <ComboboxTrem
                           id="id-trem"
-                          type="text"
-                          placeholder="Número/ID do trem"
-                          value={idTrem}
-                          onChange={(e) => setIdTrem(e.target.value)}
-                          maxLength={100}
-                          className="w-full form-control"
+                          valor={idTrem}
+                          linhaSelecionada={linha}
+                          aoMudar={(novoValor) => setIdTrem(novoValor)}
+                          placeholder="Ex: Q004, S024 ou digite livremente"
+                          desabilitado={loading}
+                          className="w-full"
                         />
                       </div>
 
