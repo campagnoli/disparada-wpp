@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { finalizarMensagemComAssinaturaSCO, incluirSCO, normalizarSCO } from '@/lib/mensagens';
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
 import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
@@ -343,47 +344,32 @@ export async function DELETE(request: Request) {
 	}
 
 	try {
-		// Primeiro verifica se os códigos existem antes de excluir
-		const { data: existentes, error: erroBusca } = await supabase
-			.from('ocorrencias')
-			.select('codigo_evento')
-			.in('codigo_evento', codigosLimpos);
-
-		if (erroBusca) {
-			console.error('Falha ao buscar ocorrências:', erroBusca.message);
-			return NextResponse.json(
-				{ error: 'Não foi possível verificar as ocorrências.' },
-				{ status: 500 }
-			);
-		}
-
-		const codigosExistentes = (existentes ?? []).map((item) => item.codigo_evento);
-
-		if (codigosExistentes.length === 0) {
-			return NextResponse.json(
-				{ error: 'Nenhuma ocorrência encontrada com os IDs informados.' },
-				{ status: 404 }
-			);
-		}
-
-		// Executa a exclusão apenas nos que existem
-		const { error: erroDelete } = await supabase
+		const { data: excluidas, error } = await createSupabaseAdminClient()
 			.from('ocorrencias')
 			.delete()
-			.in('codigo_evento', codigosExistentes);
+			.in('codigo_evento', codigosLimpos)
+			.select('codigo_evento');
 
-		if (erroDelete) {
-			console.error('Falha ao excluir ocorrências:', erroDelete.message);
+		if (error) {
+			console.error('Falha ao excluir ocorrências:', error.message);
 			return NextResponse.json(
 				{ error: 'Não foi possível excluir as ocorrências.' },
 				{ status: 500 }
 			);
 		}
 
+		const codigosExcluidos = (excluidas ?? []).map((item) => item.codigo_evento);
+		if (codigosExcluidos.length === 0) {
+			return NextResponse.json(
+				{ error: 'Nenhuma ocorrência encontrada com os IDs informados.' },
+				{ status: 404 }
+			);
+		}
+
 		return NextResponse.json({
 			sucesso: true,
-			excluidas: codigosExistentes.length,
-			codigos: codigosExistentes,
+			excluidas: codigosExcluidos.length,
+			codigos: codigosExcluidos,
 		});
 	} catch (error: unknown) {
 		console.error('Erro inesperado ao excluir ocorrências:', error);
