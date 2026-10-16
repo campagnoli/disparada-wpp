@@ -268,6 +268,7 @@ export interface ContextoPrompt {
   quemComunicou?: string;
   tremEstacaoInforma?: string;
   paeseAcionado?: boolean;
+  temImpactoOutraLinha?: boolean;
 }
 
 /**
@@ -381,6 +382,15 @@ ${viasPermitidas.length > 0 ? `- Vias homologadas para este trecho: ${viasPermit
 
   if (validacaoOcorrenciaAtual) {
     resultado += `\n\n${validacaoOcorrenciaAtual.trim()}`;
+  }
+
+  if (contexto.temImpactoOutraLinha) {
+    resultado += `\n\nIMPACTO REFLEXO EM OUTRA LINHA:
+- Há impacto confirmado em outra(s) linha(s), informada(s) nos dados da ocorrência.
+- Inclua no despacho de OPERAÇÃO, especialmente no campo impacto, a repercussão direta na(s) linha(s) secundária(s), usando somente as linhas e a descrição fornecidas.
+- Considere também esse reflexo na estratégia de circulação e no resumo executivo quando aplicável.
+- Não invente trechos, estações, restrições ou efeitos além dos dados fornecidos.
+- Exemplo de formato: "*Impacto:* Circulação com intervalos maiores na Linha 11-Coral. Reflexo na Linha 12-Safira com retenção momentânea em Tatuapé."`;
   }
 
   return resultado;

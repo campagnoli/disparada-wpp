@@ -5,6 +5,7 @@ import { finalizarMensagemComAssinaturaSCO, incluirSCO, normalizarSCO } from '@/
 import { isClassificacaoOcorrencia, isTipoIN } from '@/lib/classificacao-ocorrencia';
 import { aplicarEncerramentoNaMensagem } from '@/lib/mensagem-templates-pure';
 import { obterTemplatesMensagemAtivos } from '@/lib/mensagem-templates';
+import { normalizarImpactoOutraLinha } from '@/lib/impacto-outra-linha';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
 	if (codigoEvento) {
 		const { data, error } = await supabase
 			.from('ocorrencias')
-			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
 	const from = (page - 1) * pageSize;
 	const { data, count, error } = await supabase
 		.from('ocorrencias')
-		.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, falha, hora_inicio, hora_fim, status', { count: 'exact' })
+		.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status', { count: 'exact' })
 		.order('created_at', { ascending: false })
 		.range(from, from + pageSize - 1);
 
@@ -110,6 +111,18 @@ export async function POST(request: Request) {
 	}
 
 	const linha = getText(body.linha);
+	const impactoOutraLinha = normalizarImpactoOutraLinha(
+		body.temImpactoOutraLinha,
+		body.linhasImpactadasSecundarias,
+		body.descricaoImpactoSecundario,
+		linha,
+	);
+	if (!impactoOutraLinha) {
+		return NextResponse.json(
+			{ error: 'Informe linhas secundárias diferentes da linha principal e descreva o impacto quando houver reflexo em outra linha (até 5000 caracteres).' },
+			{ status: 400 }
+		);
+	}
 	const tipoLocalidade = getText(body.tipoLocalidade);
 	const viaInformada = getText(body.via);
 	const via = viaInformada || (tipoLocalidade === 'estacao' ? 'Não aplicável' : '');
@@ -207,6 +220,9 @@ export async function POST(request: Request) {
 			p_paese_acionado: paeseAcionado,
 			p_paese_modalidades: paeseModalidades,
 			p_paese_trecho: paeseTrecho || null,
+			p_tem_impacto_outra_linha: impactoOutraLinha.temImpactoOutraLinha,
+			p_linhas_impactadas_secundarias: impactoOutraLinha.linhasImpactadasSecundarias,
+			p_descricao_impacto_secundario: impactoOutraLinha.descricaoImpactoSecundario || null,
 		});
 
 		if (error) {
@@ -250,7 +266,7 @@ export async function PATCH(request: Request) {
 	try {
 		const { data: atual, error: buscaError } = await supabase
 			.from('ocorrencias')
-			.select('linha, hora_inicio, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('linha, hora_inicio, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, msg_comunicacao, msg_operacao, msg_gerencia')
 			.eq('codigo_evento', codigoEvento)
 			.maybeSingle();
 
@@ -266,15 +282,20 @@ export async function PATCH(request: Request) {
 		const textoGerencia = getText(body.msg_gerencia) || atual.msg_gerencia;
 		const { templates } = await obterTemplatesMensagemAtivos();
 		const linha = getText(atual.linha) || 'LINHA NÃO INFORMADA';
+		const impactoOutraLinha = {
+			temImpactoOutraLinha: atual.tem_impacto_outra_linha,
+			linhaSecundariaAfetada: atual.linhas_impactadas_secundarias.join(', '),
+			impactoSecundario: atual.descricao_impacto_secundario ?? '',
+		};
 
 		const msgComunicacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio, templates.encerramento.comunicacao, `INFORME CCO - ${linha}`)
+			? aplicarEncerramentoNaMensagem(textoComunicacao, horaFim, atual.hora_inicio, templates.encerramento.comunicacao, `INFORME CCO - ${linha}`, impactoOutraLinha)
 			: textoComunicacao;
 		const msgOperacao = horaFim
-			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio, templates.encerramento.operacao, `DESPACHO CCO - ${linha}`)
+			? aplicarEncerramentoNaMensagem(textoOperacao, horaFim, atual.hora_inicio, templates.encerramento.operacao, `DESPACHO CCO - ${linha}`, impactoOutraLinha)
 			: textoOperacao;
 		const msgGerencia = horaFim
-			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio, templates.encerramento.gerencia, `INFORME EXECUTIVO CCO - ${linha}`)
+			? aplicarEncerramentoNaMensagem(textoGerencia, horaFim, atual.hora_inicio, templates.encerramento.gerencia, `INFORME EXECUTIVO CCO - ${linha}`, impactoOutraLinha)
 			: textoGerencia;
 		const comunicacaoFinal = finalizarMensagemComAssinaturaSCO(msgComunicacao);
 		const operacaoFinal = finalizarMensagemComAssinaturaSCO(msgOperacao);
@@ -295,7 +316,7 @@ export async function PATCH(request: Request) {
 			.from('ocorrencias')
 			.update(updatePayload)
 			.eq('codigo_evento', codigoEvento)
-			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
+			.select('id, codigo_evento, created_at, linha, via, localidade, id_trem, prefixo_viagem, classificacoes, tipo_in, paese_acionado, paese_modalidades, paese_trecho, tem_impacto_outra_linha, linhas_impactadas_secundarias, descricao_impacto_secundario, falha, hora_inicio, hora_fim, status, msg_comunicacao, msg_operacao, msg_gerencia')
 			.single();
 
 		if (error) {

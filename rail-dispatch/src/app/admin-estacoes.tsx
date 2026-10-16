@@ -18,6 +18,7 @@ import {
   DoorOpen,
   Filter,
 } from 'lucide-react';
+import { LINHAS_OPERACIONAIS } from '@/lib/impacto-outra-linha';
 
 export interface EstacaoAdmin {
   id?: string;
@@ -35,7 +36,7 @@ interface AdminEstacoesProps {
   onNotificarSucesso?: (titulo: string, mensagem: string) => void;
 }
 
-const LINHAS_OPCOES = ['Linha 11-Coral', 'Linha 12-Safira', 'Linha 13-Jade'];
+const LINHAS_OPCOES = LINHAS_OPERACIONAIS;
 
 const ITENS_INFRAESTRUTURA_OPCOES = [
   { id: 'elevador', label: 'Elevador', icon: ArrowUpDown },
@@ -43,6 +44,13 @@ const ITENS_INFRAESTRUTURA_OPCOES = [
   { id: 'linha_bloqueio', label: 'Linha de Bloqueio (Catracas)', icon: ShieldCheck },
   { id: 'acesso_estacao', label: 'Acesso à Estação', icon: DoorOpen },
 ];
+
+async function buscarEstacoes(signal?: AbortSignal): Promise<EstacaoAdmin[]> {
+  const res = await fetch('/api/admin/estacoes', { signal });
+  const data = (await res.json()) as { estacoes?: EstacaoAdmin[]; error?: string };
+  if (!res.ok) throw new Error(data.error || 'Falha ao buscar estações.');
+  return data.estacoes ?? [];
+}
 
 export default function AdminEstacoes({
   onNotificarErro,
@@ -75,10 +83,7 @@ export default function AdminEstacoes({
   const carregarEstacoes = async () => {
     setCarregando(true);
     try {
-      const res = await fetch('/api/admin/estacoes');
-      const data = (await res.json()) as { estacoes?: EstacaoAdmin[]; error?: string };
-      if (!res.ok) throw new Error(data.error || 'Falha ao buscar estações.');
-      setEstacoes(data.estacoes ?? []);
+      setEstacoes(await buscarEstacoes());
     } catch (err: unknown) {
       console.error('Erro ao listar estações:', err);
       onNotificarErro?.(err, 'Carregamento de estações');
@@ -88,8 +93,23 @@ export default function AdminEstacoes({
   };
 
   useEffect(() => {
-    void carregarEstacoes();
-  }, []);
+    const controller = new AbortController();
+    const carregarInicialmente = async () => {
+      try {
+        const dados = await buscarEstacoes(controller.signal);
+        if (!controller.signal.aborted) setEstacoes(dados);
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return;
+        console.error('Erro ao listar estações:', err);
+        onNotificarErro?.(err, 'Carregamento de estações');
+      } finally {
+        if (!controller.signal.aborted) setCarregando(false);
+      }
+    };
+
+    void carregarInicialmente();
+    return () => controller.abort();
+  }, [onNotificarErro]);
 
   const resetForm = () => {
     setEditandoId(null);

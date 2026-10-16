@@ -35,9 +35,6 @@ import {
   Headphones,
   Megaphone,
   Trash2,
-  User,
-  Calendar,
-  Lock,
 } from 'lucide-react';
 import { isModeloGemini, modelosGemini, type ModeloGemini } from '@/lib/gemini-models';
 import { opcoesClassificacao, definicoesTiposIN } from '@/lib/classificacao-ocorrencia';
@@ -50,7 +47,6 @@ import {
   type TemplatesGrupoMensagem,
 } from '@/lib/mensagem-templates-pure';
 import {
-  buscarViasEstacao,
   buscarDadosEstacao,
   buscarViasTrecho,
   formatarVias,
@@ -58,6 +54,7 @@ import {
 } from '@/lib/vias';
 import { SeletorEstacao } from '@/components/seletor-estacao';
 import { ComboboxTrem } from '@/components/combobox-trem';
+import { ImpactoOutraLinhaFields } from '@/components/impacto-outra-linha-fields';
 
 export interface ItemLoop {
   id: string;
@@ -126,6 +123,9 @@ interface OcorrenciaHistorico {
   paese_acionado: boolean;
   paese_modalidades: ModalidadePaese[];
   paese_trecho: string;
+  tem_impacto_outra_linha: boolean;
+  linhas_impactadas_secundarias: string[];
+  descricao_impacto_secundario: string | null;
   falha: string;
   hora_inicio: string;
   hora_fim: string | null;
@@ -389,9 +389,7 @@ export default function DespachoOcorrencias() {
   const [plataformasDisponiveis, setPlataformasDisponiveis] = useState<string[]>([]);
   const [plataformasSelecionadas, setPlataformasSelecionadas] = useState<string[]>([]);
   const [detalheLocalizacao, setDetalheLocalizacao] = useState('');
-  const [itensInfraDisponiveis, setItensInfraDisponiveis] = useState<string[]>([]);
   const [loadingVias, setLoadingVias] = useState(false);
-  const [erroVias, setErroVias] = useState('');
   const [novaViaManual, setNovaViaManual] = useState('');
   const [novaPlataformaManual, setNovaPlataformaManual] = useState('');
 
@@ -463,7 +461,6 @@ export default function DespachoOcorrencias() {
     setPlataformasDisponiveis([]);
     setDetalheLocalizacao('');
     setElementoAfetado('geral');
-    setErroVias('');
     if (novoTipo === 'estacao') {
       setQuemComunicou('estacao');
       setIdTrem('');
@@ -478,6 +475,9 @@ export default function DespachoOcorrencias() {
   const [buscaFalhas, setBuscaFalhas] = useState('');
   const [falhaEditada, setFalhaEditada] = useState<string | null>(null);
   const [impactoEditado, setImpactoEditado] = useState<string | null>(null);
+  const [temImpactoOutraLinha, setTemImpactoOutraLinha] = useState(false);
+  const [linhasImpactadasSecundarias, setLinhasImpactadasSecundarias] = useState<string[]>([]);
+  const [descricaoImpactoSecundario, setDescricaoImpactoSecundario] = useState('');
   const [falhasPredefinidas, setFalhasPredefinidas] = useState<FalhaPredefinida[]>([]);
   const [carregandoFalhas, setCarregandoFalhas] = useState(true);
   const [erroFalhas, setErroFalhas] = useState('');
@@ -538,6 +538,10 @@ export default function DespachoOcorrencias() {
     horaFim: string,
     horaInicio?: string,
     linha?: string,
+    impactoOutraLinha?: Pick<
+      OcorrenciaHistorico,
+      'tem_impacto_outra_linha' | 'linhas_impactadas_secundarias' | 'descricao_impacto_secundario'
+    >,
   ) => {
     const rotulo = canal === 'operacao'
       ? 'DESPACHO CCO'
@@ -551,6 +555,13 @@ export default function DespachoOcorrencias() {
       horaInicio,
       templatesEncerramento[canal],
       tituloFallback,
+      impactoOutraLinha
+        ? {
+            temImpactoOutraLinha: impactoOutraLinha.tem_impacto_outra_linha,
+            linhaSecundariaAfetada: impactoOutraLinha.linhas_impactadas_secundarias.join(', '),
+            impactoSecundario: impactoOutraLinha.descricao_impacto_secundario ?? '',
+          }
+        : undefined,
     );
   }, [templatesEncerramento]);
 
@@ -642,6 +653,13 @@ export default function DespachoOcorrencias() {
         && falhasSelecionadas.length > 0
         && falha.trim().length > 0
         && impacto.trim().length > 0
+        && (
+          !temImpactoOutraLinha
+          || (
+            linhasImpactadasSecundarias.length > 0
+            && !!descricaoImpactoSecundario.trim()
+          )
+        )
       );
     }
     if (etapaAtual.id === 'classificacao') {
@@ -723,8 +741,6 @@ export default function DespachoOcorrencias() {
     gerencia: true,
   });
   const [disparandoCanal, setDisparandoCanal] = useState<string | null>(null);
-
-  const [formularioModificado, setFormularioModificado] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<ModalMensagemConfig>({
     aberto: false,
@@ -919,6 +935,9 @@ export default function DespachoOcorrencias() {
           falhasSelecionadas.length > 0 ||
           falha.trim().length > 0 ||
           impacto.trim().length > 0 ||
+          temImpactoOutraLinha ||
+          linhasImpactadasSecundarias.length > 0 ||
+          descricaoImpactoSecundario.trim().length > 0 ||
           classificacoes.length > 0 ||
           tipoIN.trim().length > 0 ||
           idTrem.trim().length > 0 ||
@@ -945,6 +964,9 @@ export default function DespachoOcorrencias() {
     falhasSelecionadas,
     falha,
     impacto,
+    temImpactoOutraLinha,
+    linhasImpactadasSecundarias,
+    descricaoImpactoSecundario,
     classificacoes,
     tipoIN,
     idTrem,
@@ -978,74 +1000,93 @@ export default function DespachoOcorrencias() {
   }, []);
 
   // Carregamento dinâmico de vias e subsistemas para Estação no Supabase
-  const carregarDadosEstacaoSelecionada = useCallback(async (siglaEstacao: string, linhaEstacao: string) => {
+  const carregarDadosEstacaoSelecionada = useCallback(async (
+    siglaEstacao: string,
+    linhaEstacao: string,
+    estaAtivo: () => boolean,
+  ) => {
     if (!siglaEstacao) {
+      if (!estaAtivo()) return;
       setViasDisponiveis([]);
       setViasSelecionadas([]);
       setPlataformasDisponiveis([]);
       setPlataformasSelecionadas([]);
-      setItensInfraDisponiveis([]);
       return;
     }
+    if (!estaAtivo()) return;
     setLoadingVias(true);
-    setErroVias('');
     try {
       const dados = await buscarDadosEstacao(siglaEstacao, linhaEstacao);
+      if (!estaAtivo()) return;
       setViasDisponiveis(dados.vias);
       setPlataformasDisponiveis(dados.plataformas);
-      setItensInfraDisponiveis(dados.itens_infraestrutura);
       setViasSelecionadas([]);
       setPlataformasSelecionadas([]);
     } catch (err: unknown) {
-      console.error('Falha ao carregar dados da estação:', err);
-      setErroVias('Instabilidade ao carregar dados da estação.');
+      if (estaAtivo()) console.error('Falha ao carregar dados da estação:', err);
     } finally {
-      setLoadingVias(false);
+      if (estaAtivo()) setLoadingVias(false);
     }
   }, []);
 
   // Carregamento dinâmico de vias para Trecho entre estações no Supabase
-  const carregarViasTrecho = useCallback(async (origem: string, destino: string, linhaAtual: string) => {
+  const carregarViasTrecho = useCallback(async (
+    origem: string,
+    destino: string,
+    linhaAtual: string,
+    estaAtivo: () => boolean,
+  ) => {
     if (!origem || !destino || origem === destino) {
+      if (!estaAtivo()) return;
       setViasDisponiveis([]);
       setViasSelecionadas([]);
       return;
     }
+    if (!estaAtivo()) return;
     setLoadingVias(true);
-    setErroVias('');
     setViasSelecionadas([]);
 
     try {
       const viasEncontradas = await buscarViasTrecho(linhaAtual, origem, destino);
+      if (!estaAtivo()) return;
       setViasDisponiveis(viasEncontradas);
     } catch (err: unknown) {
-      console.error('Falha ao carregar vias do trecho:', err);
-      setErroVias('Instabilidade ao carregar vias do trecho.');
+      if (estaAtivo()) console.error('Falha ao carregar vias do trecho:', err);
     } finally {
-      setLoadingVias(false);
+      if (estaAtivo()) setLoadingVias(false);
     }
   }, []);
 
   // Monitora alterações de localidade e dispara consulta das vias e subsistemas
   useEffect(() => {
-    if (tipoLocalidade === 'estacao') {
-      if (localidadeInicio) {
-        void carregarDadosEstacaoSelecionada(localidadeInicio, linha);
-      } else {
-        setViasDisponiveis([]);
-        setViasSelecionadas([]);
-        setPlataformasDisponiveis([]);
-        setPlataformasSelecionadas([]);
-        setItensInfraDisponiveis([]);
+    let ativo = true;
+    const sincronizarLocalidade = async () => {
+      await Promise.resolve();
+      if (!ativo) return;
+
+      if (tipoLocalidade === 'estacao') {
+        if (localidadeInicio) {
+          void carregarDadosEstacaoSelecionada(localidadeInicio, linha, () => ativo);
+        } else {
+          setViasDisponiveis([]);
+          setViasSelecionadas([]);
+          setPlataformasDisponiveis([]);
+          setPlataformasSelecionadas([]);
+        }
+      } else if (tipoLocalidade === 'trecho') {
+        if (localidadeInicio && localidadeFim && localidadeInicio !== localidadeFim) {
+          void carregarViasTrecho(localidadeInicio, localidadeFim, linha, () => ativo);
+        } else {
+          setViasDisponiveis([]);
+          setViasSelecionadas([]);
+        }
       }
-    } else if (tipoLocalidade === 'trecho') {
-      if (localidadeInicio && localidadeFim && localidadeInicio !== localidadeFim) {
-        void carregarViasTrecho(localidadeInicio, localidadeFim, linha);
-      } else {
-        setViasDisponiveis([]);
-        setViasSelecionadas([]);
-      }
-    }
+    };
+
+    void sincronizarLocalidade();
+    return () => {
+      ativo = false;
+    };
   }, [tipoLocalidade, localidadeInicio, localidadeFim, linha, carregarDadosEstacaoSelecionada, carregarViasTrecho]);
 
   const alternarVia = (viaItem: string) => {
@@ -1234,6 +1275,9 @@ export default function DespachoOcorrencias() {
         paeseModalidades: paeseAcionado ? paeseModalidades : [],
         paeseTrecho: paeseAcionado ? paeseTrecho.trim() : '',
         falhas: [{ descricao: falha, impacto }],
+        temImpactoOutraLinha,
+        linhasImpactadasSecundarias: temImpactoOutraLinha ? linhasImpactadasSecundarias : [],
+        descricaoImpactoSecundario: temImpactoOutraLinha ? descricaoImpactoSecundario.trim() : '',
         sco,
         identificacaoComunicador,
         falha,
@@ -1385,6 +1429,9 @@ export default function DespachoOcorrencias() {
         paeseModalidades: paeseAcionado ? paeseModalidades : [],
         paeseTrecho: paeseAcionado ? paeseTrecho.trim() : '',
         falhas: [{ descricao: falha, impacto }],
+        temImpactoOutraLinha,
+        linhasImpactadasSecundarias: temImpactoOutraLinha ? linhasImpactadasSecundarias : [],
+        descricaoImpactoSecundario: temImpactoOutraLinha ? descricaoImpactoSecundario.trim() : '',
         sco,
         falha,
         horaInicio,
@@ -1437,9 +1484,9 @@ export default function DespachoOcorrencias() {
     const horaFinal = ocorrencia.hora_fim || horaAtual;
     setHoraFim(horaFinal);
     setMsgFimEditada({
-      comunicacao: aplicarModeloEncerramento('comunicacao', ocorrencia.msg_comunicacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
-      operacao: aplicarModeloEncerramento('operacao', ocorrencia.msg_operacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
-      gerencia: aplicarModeloEncerramento('gerencia', ocorrencia.msg_gerencia, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha),
+      comunicacao: aplicarModeloEncerramento('comunicacao', ocorrencia.msg_comunicacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
+      operacao: aplicarModeloEncerramento('operacao', ocorrencia.msg_operacao, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
+      gerencia: aplicarModeloEncerramento('gerencia', ocorrencia.msg_gerencia, horaFinal, ocorrencia.hora_inicio, ocorrencia.linha, ocorrencia),
     });
     setSucessoEncerramento('');
     setDisparoRealizado(false);
@@ -1453,9 +1500,9 @@ export default function DespachoOcorrencias() {
     setHoraFim(novaHora);
     if (novaHora && /^([01]\d|2[0-3]):[0-5]\d$/.test(novaHora) && ocorrenciaSelecionada) {
       setMsgFimEditada({
-        comunicacao: aplicarModeloEncerramento('comunicacao', ocorrenciaSelecionada.msg_comunicacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
-        operacao: aplicarModeloEncerramento('operacao', ocorrenciaSelecionada.msg_operacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
-        gerencia: aplicarModeloEncerramento('gerencia', ocorrenciaSelecionada.msg_gerencia, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+        comunicacao: aplicarModeloEncerramento('comunicacao', ocorrenciaSelecionada.msg_comunicacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
+        operacao: aplicarModeloEncerramento('operacao', ocorrenciaSelecionada.msg_operacao, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
+        gerencia: aplicarModeloEncerramento('gerencia', ocorrenciaSelecionada.msg_gerencia, novaHora, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
       });
     }
   };
@@ -1531,9 +1578,9 @@ export default function DespachoOcorrencias() {
     setSucessoEncerramento('');
 
     const msgAtualizada = {
-      comunicacao: aplicarModeloEncerramento('comunicacao', msgFimEditada.comunicacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
-      operacao: aplicarModeloEncerramento('operacao', msgFimEditada.operacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
-      gerencia: aplicarModeloEncerramento('gerencia', msgFimEditada.gerencia, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha),
+      comunicacao: aplicarModeloEncerramento('comunicacao', msgFimEditada.comunicacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
+      operacao: aplicarModeloEncerramento('operacao', msgFimEditada.operacao, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
+      gerencia: aplicarModeloEncerramento('gerencia', msgFimEditada.gerencia, horaFim, ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.linha, ocorrenciaSelecionada),
     };
     setMsgFimEditada(msgAtualizada);
 
@@ -2015,13 +2062,6 @@ export default function DespachoOcorrencias() {
     });
   };
 
-  const estacoesPorLinha = estacoes.reduce<Record<string, Estacao[]>>((acc, est) => {
-    const l = est.linha || 'Outras';
-    if (!acc[l]) acc[l] = [];
-    acc[l].push(est);
-    return acc;
-  }, {});
-
   return (
     <main className="min-h-screen bg-white text-slate-900 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -2216,6 +2256,7 @@ export default function DespachoOcorrencias() {
                             setLocalidadeInicio(est.sigla);
                             if (est.linha) {
                               setLinha(est.linha);
+                              setLinhasImpactadasSecundarias((atuais) => atuais.filter((item) => item !== est.linha));
                             }
                             // Limpeza de estados da estação anterior
                             setViasSelecionadas([]);
@@ -2616,6 +2657,7 @@ export default function DespachoOcorrencias() {
                               setLocalidadeInicio(est.sigla);
                               if (est.linha && est.linha !== linha) {
                                 setLinha(est.linha);
+                                setLinhasImpactadasSecundarias((atuais) => atuais.filter((item) => item !== est.linha));
                                 setLocalidadeFim('');
                               }
                               setViasSelecionadas([]);
@@ -3216,6 +3258,21 @@ export default function DespachoOcorrencias() {
                         className="w-full form-control"
                       />
                     </div>
+                    <ImpactoOutraLinhaFields
+                      linhaPrincipal={linha}
+                      temImpacto={temImpactoOutraLinha}
+                      linhasSelecionadas={linhasImpactadasSecundarias}
+                      descricao={descricaoImpactoSecundario}
+                      onMudarTemImpacto={(temImpacto) => {
+                        setTemImpactoOutraLinha(temImpacto);
+                        if (!temImpacto) {
+                          setLinhasImpactadasSecundarias([]);
+                          setDescricaoImpactoSecundario('');
+                        }
+                      }}
+                      onMudarLinhas={setLinhasImpactadasSecundarias}
+                      onMudarDescricao={setDescricaoImpactoSecundario}
+                    />
                   </div>
 
                   <div>
@@ -3534,6 +3591,9 @@ export default function DespachoOcorrencias() {
                       setFalhasSelecionadas([]);
                       setFalhaEditada(null);
                       setImpactoEditado(null);
+                      setTemImpactoOutraLinha(false);
+                      setLinhasImpactadasSecundarias([]);
+                      setDescricaoImpactoSecundario('');
                       setEstrategiaLoop(false);
                       setQtdLoops(1);
                       setLoops([

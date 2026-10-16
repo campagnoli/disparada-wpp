@@ -78,12 +78,11 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
 
-  const carregarConfig = useCallback(async () => {
-    setCarregando(true);
-    setErro('');
+  const carregarConfig = useCallback(async (signal: AbortSignal) => {
     try {
-      const res = await fetch('/api/admin/whatsapp', { cache: 'no-store' });
+      const res = await fetch('/api/admin/whatsapp', { cache: 'no-store', signal });
       const data = (await res.json()) as DadosWhatsAppAPI;
+      if (signal.aborted) return;
       if (!res.ok) throw new Error('Não foi possível carregar as configurações de WhatsApp.');
 
       setConfig(data.config);
@@ -92,16 +91,21 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
       setUpdatedAt(data.updatedAt);
       setOrigem(data.origem);
     } catch (err: unknown) {
+      if (signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Falha ao carregar configurações.';
       setErro(msg);
       onNotificarErro?.(err, 'Carregamento de WhatsApp');
     } finally {
-      setCarregando(false);
+      if (!signal.aborted) setCarregando(false);
     }
   }, [onNotificarErro]);
 
   useEffect(() => {
-    void carregarConfig();
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) return carregarConfig(controller.signal);
+    });
+    return () => controller.abort();
   }, [carregarConfig]);
 
   const houveAlteracao = Boolean(

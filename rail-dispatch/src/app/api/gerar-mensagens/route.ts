@@ -13,6 +13,7 @@ import {
   isTipoIN,
 } from '@/lib/classificacao-ocorrencia';
 import { buscarViasEstacao, buscarViasTrecho } from '@/lib/vias';
+import { normalizarImpactoOutraLinha } from '@/lib/impacto-outra-linha';
 
 function getErrorStatus(error: unknown): number | undefined {
   if (typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number') {
@@ -118,6 +119,18 @@ export async function POST(req: Request) {
     const dados = body;
     const sco = normalizarSCO(dados.sco ?? dados.informante);
     const linha = typeof dados.linha === 'string' ? dados.linha : '';
+    const impactoOutraLinha = normalizarImpactoOutraLinha(
+      dados.temImpactoOutraLinha,
+      dados.linhasImpactadasSecundarias,
+      dados.descricaoImpactoSecundario,
+      linha,
+    );
+    if (!impactoOutraLinha) {
+      return NextResponse.json(
+        { error: 'Informe linhas secundárias diferentes da linha principal e descreva o impacto quando houver reflexo em outra linha (até 5000 caracteres).' },
+        { status: 400 }
+      );
+    }
     const via = typeof dados.via === 'string' ? dados.via : '';
     const elementoAfetado = typeof dados.elementoAfetado === 'string' ? dados.elementoAfetado.trim() : '';
     const plataformasAfetadas = Array.isArray(dados.plataformasAfetadas)
@@ -298,6 +311,7 @@ export async function POST(req: Request) {
     const dadosOcorrencia: Record<string, unknown> = { ...dados };
     delete dadosOcorrencia.modelo;
     dadosOcorrencia.falhas = falhas;
+    Object.assign(dadosOcorrencia, impactoOutraLinha);
     dadosOcorrencia.idTrem = idTrem;
     dadosOcorrencia.prefixoViagem = prefixoViagem;
     dadosOcorrencia.apoioMRSCiente = prefixoDeCarga ? apoioMRSCienteRecebido : null;
@@ -449,6 +463,7 @@ export async function POST(req: Request) {
       quemComunicou: quemComunicou || undefined,
       tremEstacaoInforma,
       paeseAcionado,
+      temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
     });
 
     if (exemplosAprendizado.length > 0) {
@@ -607,6 +622,9 @@ ${exemplosFewShot}`;
         classificacao: classificacaoFormatada || undefined,
         falha: operacaoData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: operacaoData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
+        temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
+        linhaSecundariaAfetada: impactoOutraLinha.linhasImpactadasSecundarias.join(', '),
+        impactoSecundario: impactoOutraLinha.descricaoImpactoSecundario,
         acoes: operacaoData.acoes,
         sco,
         linha,
@@ -641,6 +659,9 @@ ${exemplosFewShot}`;
         classificacao: classificacaoFormatada || undefined,
         falha: gerenciaData.falha || (typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : ''),
         impacto: gerenciaData.impacto || (typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : ''),
+        temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
+        linhaSecundariaAfetada: impactoOutraLinha.linhasImpactadasSecundarias.join(', '),
+        impactoSecundario: impactoOutraLinha.descricaoImpactoSecundario,
         acoes: gerenciaData.acoes,
         sco,
         linha,
@@ -673,6 +694,9 @@ ${exemplosFewShot}`;
       classificacao: classificacaoFormatada || undefined,
       falha: typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : '',
       impacto: typeof dadosOcorrencia.impacto === 'string' ? dadosOcorrencia.impacto : '',
+      temImpactoOutraLinha: impactoOutraLinha.temImpactoOutraLinha,
+      linhaSecundariaAfetada: impactoOutraLinha.linhasImpactadasSecundarias.join(', '),
+      impactoSecundario: impactoOutraLinha.descricaoImpactoSecundario,
       acoes: '',
       textoComunicacao: textoComunicacaoBruto,
       sco,

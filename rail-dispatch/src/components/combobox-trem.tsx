@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, X, TrainFront, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -46,45 +46,57 @@ export function ComboboxTrem({
   const [aberto, setAberto] = useState(false);
   const [termoBusca, setTermoBusca] = useState('');
   const [indiceFocado, setIndiceFocado] = useState(0);
-  const [trensDisponiveis, setTrensDisponiveis] = useState<TremItem[]>([]);
-  const [carregandoTrens, setCarregandoTrens] = useState(false);
+  const [resultadoBusca, setResultadoBusca] = useState<{
+    linha: string;
+    trens: TremItem[];
+  } | null>(null);
+  const { resultadoDaLinhaAtual, trensDisponiveis } = useMemo(() => {
+    const correspondeALinha = resultadoBusca?.linha === linhaSelecionada;
+    return {
+      resultadoDaLinhaAtual: correspondeALinha,
+      trensDisponiveis: correspondeALinha ? resultadoBusca.trens : [],
+    };
+  }, [resultadoBusca, linhaSelecionada]);
+  const carregandoTrens = Boolean(linhaSelecionada.trim()) && !resultadoDaLinhaAtual;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listaRef = useRef<HTMLUListElement>(null);
 
-  // Busca trens da linha selecionada no Supabase
-  const buscarTrens = useCallback(async (linha: string) => {
-    if (!linha || linha.trim() === '') {
-      setTrensDisponiveis([]);
-      return;
-    }
-
-    setCarregandoTrens(true);
-    try {
-      const { data, error } = await supabase
-        .from('trens')
-        .select('id_trem')
-        .eq('linha', linha)
-        .order('id_trem');
-
-      if (error) {
-        console.warn('Falha ao buscar trens do Supabase:', error.message);
-        setTrensDisponiveis([]);
-      } else {
-        setTrensDisponiveis((data ?? []).map((item) => ({ id_trem: item.id_trem })));
-      }
-    } catch (err) {
-      console.warn('Erro inesperado ao buscar trens:', err);
-      setTrensDisponiveis([]);
-    } finally {
-      setCarregandoTrens(false);
-    }
-  }, []);
-
   useEffect(() => {
-    buscarTrens(linhaSelecionada);
-  }, [buscarTrens, linhaSelecionada]);
+    if (!linhaSelecionada.trim()) return;
+
+    const controller = new AbortController();
+    const buscarTrens = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('trens')
+          .select('id_trem')
+          .eq('linha', linhaSelecionada)
+          .order('id_trem')
+          .abortSignal(controller.signal);
+
+        if (controller.signal.aborted) return;
+        if (error) {
+          console.warn('Falha ao buscar trens do Supabase:', error.message);
+          setResultadoBusca({ linha: linhaSelecionada, trens: [] });
+          return;
+        }
+
+        setResultadoBusca({
+          linha: linhaSelecionada,
+          trens: (data ?? []).map((item) => ({ id_trem: item.id_trem })),
+        });
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return;
+        console.warn('Erro inesperado ao buscar trens:', err);
+        setResultadoBusca({ linha: linhaSelecionada, trens: [] });
+      }
+    };
+
+    void buscarTrens();
+    return () => controller.abort();
+  }, [linhaSelecionada]);
 
   // Filtra trens com base no termo de busca (o que está digitado no input principal)
   const trensFiltrados = useMemo(() => {
@@ -117,11 +129,7 @@ export function ComboboxTrem({
 
   // Auto-foca o input ao abrir e rola o item focado para vista
   useEffect(() => {
-    if (!aberto) {
-      setIndiceFocado(0);
-      return;
-    }
-    setIndiceFocado(0);
+    if (!aberto) return;
     const timer = setTimeout(() => {
       inputRef.current?.focus();
     }, 30);
@@ -151,21 +159,30 @@ export function ComboboxTrem({
 
   const alternarAberto = () => {
     if (desabilitado || carregando) return;
-    setAberto((prev) => !prev);
     if (!aberto) {
       setTermoBusca(valor);
+      setIndiceFocado(0);
     }
+    setAberto((prev) => !prev);
   };
 
   const handleKeyDownInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      if (!aberto) {
+        setIndiceFocado(0);
+      } else {
+        setIndiceFocado((prev) => (prev < trensFiltrados.length - 1 ? prev + 1 : prev));
+      }
       setAberto(true);
-      setIndiceFocado((prev) => (prev < trensFiltrados.length - 1 ? prev + 1 : prev));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      if (!aberto) {
+        setIndiceFocado(0);
+      } else {
+        setIndiceFocado((prev) => (prev > 0 ? prev - 1 : 0));
+      }
       setAberto(true);
-      setIndiceFocado((prev) => (prev > 0 ? prev - 1 : 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (trensFiltrados.length > 0) {
@@ -185,6 +202,7 @@ export function ComboboxTrem({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const novoValor = e.target.value;
     setTermoBusca(novoValor);
+    setIndiceFocado(0);
     aoMudar(novoValor);
     setAberto(true);
   };
@@ -218,10 +236,10 @@ export function ComboboxTrem({
           }}
           placeholder={aberto ? 'Filtrar trens...' : placeholder}
           maxLength={100}
-          className={`w-full form-control pl-9 ${aberto ? 'border-safira ring-1 ring-safira/20' : ''} ${desabilitado ? 'opacity-60 cursor-not-allowed' : ''}`}
+          className={`w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-16 text-xs outline-none transition-all placeholder:text-slate-400 focus:border-safira focus:ring-1 focus:ring-safira ${aberto ? 'border-safira ring-1 ring-safira/20' : ''} ${desabilitado ? 'opacity-60 cursor-not-allowed' : ''}`}
         />
 
-        <div className="absolute left-2.5 top-1/2 -mt-2.5 text-slate-400 pointer-events-none">
+        <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
           <Search className="w-4 h-4" />
         </div>
 
@@ -289,7 +307,7 @@ export function ComboboxTrem({
               <li className="p-4 text-center text-slate-500 space-y-1">
                 <TrainFront className="w-6 h-6 mx-auto text-slate-300" />
                 <p className="font-medium text-xs text-slate-700">
-                  Nenhum trem para "{termoBusca}"
+                  Nenhum trem para &quot;{termoBusca}&quot;
                 </p>
                 <p className="text-[11px] text-slate-400">
                   Digite livremente ou tente outro termo.
@@ -327,6 +345,7 @@ export function ComboboxTrem({
             {termoBusca.trim().length > 0 && trensFiltrados.length === 0 && (
               <li
                 role="option"
+                aria-selected={false}
                 onClick={() => {
                   selecionarTrem(termoBusca.trim());
                 }}
@@ -336,7 +355,7 @@ export function ComboboxTrem({
                   <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 bg-amber-100 text-amber-700">
                     ✎
                   </span>
-                  <span className="truncate font-medium">Usar valor: "{termoBusca}"</span>
+                  <span className="truncate font-medium">Usar valor: &quot;{termoBusca}&quot;</span>
                 </div>
                 <span className="text-[10px] font-medium text-amber-600">Salvar</span>
               </li>
@@ -349,7 +368,7 @@ export function ComboboxTrem({
       {temValor && !valorEstaNaLista && !aberto && !desabilitado && (
         <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
-          <span className="font-medium">Valor não encontrado nos trens da linha "{linhaSelecionada}" — será salvo como digitado.</span>
+          <span className="font-medium">Valor não encontrado nos trens da linha &quot;{linhaSelecionada}&quot; — será salvo como digitado.</span>
         </p>
       )}
     </div>

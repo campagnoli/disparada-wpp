@@ -90,6 +90,9 @@ const DADOS_SIMULACAO: DadosTemplateMensagem = {
   classificacao: 'IN Tipo A (Interrupção > 2 Intervalos > 20 minutos)',
   falha: 'Falha no sistema de tração com perda de esforço e atuação de freio de emergência.',
   impacto: 'Circulação em via singela entre Luz e Tatuapé com maiores intervalos e velocidade reduzida.',
+  temImpactoOutraLinha: true,
+  linhaSecundariaAfetada: 'Linha 12-Safira',
+  impactoSecundario: 'Retenção momentânea de composições na região de Tatuapé.',
   acoes: 'Manutenção elétrica a caminho da composição, manobra de recolhimento para o pátio e apoio de segurança nas plataformas.',
   textoComunicacao: 'Atenção, passageiros da Linha 11-Coral: devido a uma ocorrência técnica em um trem na região da estação Luz, a circulação está sendo realizada com intervalos maiores entre as estações Luz e Tatuapé. Nossas equipes de manutenção já estão atuando para restabelecer a normalidade com segurança.',
   sco: 'Gabriel Campagnoli (CCO)',
@@ -119,6 +122,9 @@ const TAGS_DISPONIVEIS: Array<{
   { tag: '{{CLASSIFICACAO}}', desc: 'Classificação da ocorrência (omitido se vazia)', grupos: ['operacao', 'gerencia'] },
   { tag: '{{FALHA}}', desc: 'Descrição técnica da falha', grupos: ['operacao', 'gerencia'] },
   { tag: '{{IMPACTO}}', desc: 'Impacto operacional imediato', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{TEM_IMPACTO_OUTRA_LINHA}}', desc: 'Indica se houve impacto em outra linha (Sim/Não)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{LINHA_SECUNDARIA_AFETADA}}', desc: 'Nome(s) da(s) linha(s) secundária(s) afetada(s), omitido se vazio', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{IMPACTO_SECUNDARIO}}', desc: 'Descrição do impacto reflexo, omitida se vazia', grupos: ['operacao', 'gerencia', 'comunicacao'] },
   { tag: '{{ACOES}}', desc: 'Ações imediatas do CCO e áreas acionadas', grupos: ['operacao', 'gerencia'] },
   { tag: '{{TEXTO_COMUNICACAO}}', desc: 'Texto narrativo gerado pela IA para passageiros', grupos: ['comunicacao'] },
   { tag: '{{LINHA}}', desc: 'Nome da linha operacional', grupos: ['comunicacao', 'operacao', 'gerencia'] },
@@ -352,6 +358,7 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
       DADOS_SIMULACAO.horaInicio,
       textoCanalAtual,
       DADOS_SIMULACAO.titulo,
+      DADOS_SIMULACAO,
     );
   }, [textoCanalAtual, tipoModeloAtivo, templatesEditados, canalAtivo]);
 

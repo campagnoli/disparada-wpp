@@ -179,14 +179,11 @@ export function SeletorEstacao({
   // Auto-foca o input de busca assim que o dropdown se abre
   useEffect(() => {
     if (aberto) {
-      setIndiceFocado(0);
       const timer = setTimeout(() => {
         inputBuscaRef.current?.focus();
         inputBuscaRef.current?.select();
       }, 30);
       return () => clearTimeout(timer);
-    } else {
-      setTermoBusca('');
     }
   }, [aberto]);
 
@@ -206,7 +203,7 @@ export function SeletorEstacao({
     setTermoBusca('');
   };
 
-  const limparSelecao = (e: React.MouseEvent) => {
+  const limparSelecao = (e: React.SyntheticEvent) => {
     e.stopPropagation();
     aoMudar('', null);
     setTermoBusca('');
@@ -214,6 +211,11 @@ export function SeletorEstacao({
 
   const alternarAberto = () => {
     if (desabilitado || carregando) return;
+    if (aberto) {
+      setTermoBusca('');
+    } else {
+      setIndiceFocado(0);
+    }
     setAberto((prev) => !prev);
   };
 
@@ -223,10 +225,12 @@ export function SeletorEstacao({
 
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      if (!aberto) setIndiceFocado(0);
       setAberto(true);
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
       // Se usuário pressionar uma letra no teclado, abre com a letra digitada
       setTermoBusca(e.key);
+      if (!aberto) setIndiceFocado(0);
       setAberto(true);
     }
   };
@@ -322,7 +326,7 @@ export function SeletorEstacao({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  limparSelecao(e as unknown as React.MouseEvent);
+                  limparSelecao(e);
                 }
               }}
               title="Limpar seleção"
@@ -402,7 +406,7 @@ export function SeletorEstacao({
               </li>
             ) : agrupadoPorLinha ? (
               // Agrupamento Visual por Linha (quando sem busca digitada)
-              Object.entries(agrupadoPorLinha).map(([linhaNome, listaEst], gIdx) => (
+              Object.entries(agrupadoPorLinha).map(([linhaNome, listaEst]) => (
                 <li key={linhaNome} className="space-y-0.5">
                   <div className="px-2.5 py-1.5 text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-slate-50/60 rounded flex items-center justify-between">
                     <span>{linhaNome}</span>

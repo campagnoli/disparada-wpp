@@ -90,6 +90,9 @@ export interface DadosTemplateMensagem {
   idTrem?: string;
   prefixoViagem?: string;
   localidade?: string;
+  temImpactoOutraLinha?: boolean;
+  linhaSecundariaAfetada?: string;
+  impactoSecundario?: string;
 }
 
 /**
@@ -232,6 +235,22 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   texto = texto.replaceAll('{{ID_TREM}}', dados.idTrem ?? '');
   texto = texto.replaceAll('{{PREFIXO_VIAGEM}}', dados.prefixoViagem ?? '');
   texto = texto.replaceAll('{{LOCALIDADE}}', dados.localidade ?? '');
+  texto = texto.replaceAll('{{TEM_IMPACTO_OUTRA_LINHA}}', dados.temImpactoOutraLinha ? 'Sim' : 'Não');
+
+  const linhaSecundariaAfetada = dados.linhaSecundariaAfetada?.trim() ?? '';
+  const impactoSecundario = dados.impactoSecundario?.trim() ?? '';
+  if (!linhaSecundariaAfetada || !impactoSecundario) {
+    texto = texto
+      .split('\n')
+      .filter((linha) =>
+        !(!linhaSecundariaAfetada && linha.includes('{{LINHA_SECUNDARIA_AFETADA}}'))
+        && !(!impactoSecundario && linha.includes('{{IMPACTO_SECUNDARIO}}'))
+      )
+      .join('\n');
+  }
+  texto = texto
+    .replaceAll('{{LINHA_SECUNDARIA_AFETADA}}', linhaSecundariaAfetada)
+    .replaceAll('{{IMPACTO_SECUNDARIO}}', impactoSecundario);
 
   if (dados.resumoLoops) {
     texto = texto.replaceAll('{{RESUMO_LOOPS}}', dados.resumoLoops);
@@ -267,7 +286,11 @@ export function aplicarEncerramentoNaMensagem(
   horaFim: string,
   horaInicio?: string,
   templateEncerramento?: string,
-  tituloFallback?: string
+  tituloFallback?: string,
+  impactoOutraLinha?: Pick<
+    DadosTemplateMensagem,
+    'temImpactoOutraLinha' | 'linhaSecundariaAfetada' | 'impactoSecundario'
+  >
 ): string {
   if (!mensagem) return '';
   if (!horaFim) return mensagem;
@@ -307,5 +330,6 @@ export function aplicarEncerramentoNaMensagem(
     horaFim,
     duracao: calcularDuracao(inicio, horaFim),
     sco: assinatura,
+    ...impactoOutraLinha,
   });
 }
