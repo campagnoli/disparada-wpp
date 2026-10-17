@@ -124,7 +124,7 @@ export async function PUT(request: NextRequest) {
 
   const payload = body as {
     acao?: 'testar_conexao' | 'enviar_teste';
-    canal?: 'comunicacao' | 'operacao' | 'gerencia' | 'personalizado';
+    canal?: 'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais' | 'personalizado';
     jid?: string;
     texto?: string;
     config?: ConfiguracaoWhatsApp;

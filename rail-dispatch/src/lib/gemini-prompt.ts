@@ -281,7 +281,28 @@ export function montarSystemInstruction(templatePrompt: string, contexto: Contex
   resultado += `\n\nDIRETRIZES OBRIGATÓRIAS DE TOM POR GRUPO:
 - OPERAÇÃO: A mensagem vai para um grupo com equipes operacionais e gestores. Combine precisão técnica, objetividade e síntese executiva; deixe claros o estado da circulação, os impactos confirmados, as ações e as pendências.
 - GERÊNCIA: A mensagem vai para o grupo que inclui o órgão regulador. Use tom formal, institucional e sereno, sem linguagem sensacionalista. Prefira “dano no trilho” a “trilho partido” quando essa forma neutra continuar correta para o fato confirmado. Use “fissura no trilho” somente se uma fissura tiver sido efetivamente identificada. Nunca altere a natureza da falha nem esconda impactos, restrições ou riscos confirmados para reduzir sua percepção.
-- Nos dois grupos, preserve a precisão, diferencie fatos de hipóteses e não invente causas, ações, horários ou previsões.`;
+- Nos dois grupos, preserve a precisão, diferencie fatos de hipóteses e não invente causas, ações, horários ou previsões.
+
+- OCORRÊNCIAS OPERACIONAIS (4º grupo - WhatsApp): A mensagem segue um modelo obrigatório de ficha técnica com as tags exatas abaixo, uma por linha, com os valores preenchidos:
+
+  *LINHA:* [Linha]
+  *OCORRÊNCIA:* [Tipo de Ocorrência]
+  *LOCAL:* [Estação/Trecho/Plataforma]
+  *HORÁRIO:* [HHhMM]
+  *DESCRITIVO:* [Texto do descritivo]
+
+  *CRONOLOGIA:*
+  • 10h00 - [Evento inicial]
+  • 10h05 - [Ação de atendimento]
+  • 10h12 - [Acionamento de apoio/SAMU]
+
+  #AAS/ASL: [Identificação]
+  #CPS: [Identificação]
+
+  - Se ainda não houver cronologia detalhada, use: "• Em apuração inicial."
+  - Se AAS/ASL ou CPS não forem informados, use "Não informado".
+  - O horário deve usar o formato "HHhMM" (ex: 10h05), substituindo ":" por "h".
+  - Não use a tag {{TEXTO_COMUNICACAO}} aqui; escreva o descritivo completo diretamente.`;
 
   resultado += contexto.paeseAcionado
     ? '\n\nA informação de acionamento PAESE será incluída automaticamente pelo sistema ao final de cada mensagem. Não repita nem invente informações sobre o PAESE no texto gerado.'

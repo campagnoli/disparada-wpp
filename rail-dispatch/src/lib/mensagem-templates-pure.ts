@@ -4,6 +4,7 @@ export interface TemplatesGrupoMensagem {
   comunicacao: string;
   operacao: string;
   gerencia: string;
+  ocorrencias_operacionais: string;
 }
 
 export interface TemplatesMensagem extends TemplatesGrupoMensagem {
@@ -62,18 +63,34 @@ export const TEMPLATES_MENSAGEM_PADRAO: TemplatesMensagem = {
 {{IMPACTO}}
 
 *#SCO:* {{SCO}}`,
+  ocorrencias_operacionais: `*LINHA:* {{LINHA}}
+*OCORRÊNCIA:* {{TIPO_OCORRENCIA}}
+*LOCAL:* {{LOCAL}}
+*HORÁRIO:* {{HORARIO}}
+*DESCRITIVO:* {{DESCRITIVO}}
+
+*CRONOLOGIA*:
+{{CRONOLOGIA}}
+
+#AAS/ASL: {{AAS_ASL}}
+#CPS: {{CPS}}`,
   encerramento: {
-  comunicacao: `*Título:* {{TITULO}}
+    comunicacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
 *Duração:* {{DURACAO}}
 {{ENTREGA_RESTRICAO}}`,
-  operacao: `*Título:* {{TITULO}}
+    operacao: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
 *Duração:* {{DURACAO}}
 {{ENTREGA_RESTRICAO}}`,
-  gerencia: `*Título:* {{TITULO}}
+    gerencia: `*Título:* {{TITULO}}
+*Horário de início:* {{HORA_INICIO}}
+*Horário de fim:* {{HORA_FIM}}
+*Duração:* {{DURACAO}}
+{{ENTREGA_RESTRICAO}}`,
+    ocorrencias_operacionais: `*Título:* {{TITULO}}
 *Horário de início:* {{HORA_INICIO}}
 *Horário de fim:* {{HORA_FIM}}
 *Duração:* {{DURACAO}}

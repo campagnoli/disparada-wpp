@@ -20,6 +20,7 @@ export async function POST(req: Request) {
       { id: 'comunicacao', nome: 'Comunicação', jid: config.grupos.comunicacao, texto: mensagens?.comunicacao },
       { id: 'operacao', nome: 'Operação CCO / Executivo', jid: config.grupos.operacao, texto: mensagens?.operacao },
       { id: 'gerencia', nome: 'Gerência / Órgão Regulador', jid: config.grupos.gerencia, texto: mensagens?.gerencia },
+      { id: 'ocorrencias_operacionais', nome: 'Ocorrências Operacionais', jid: config.grupos.ocorrencias_operacionais, texto: mensagens?.ocorrencias_operacionais },
     ];
 
     const resultados = [];

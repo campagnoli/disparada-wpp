@@ -48,7 +48,7 @@ function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
   const encerramento = typeof dados.encerramento === 'object' && dados.encerramento !== null
     ? dados.encerramento as Record<string, unknown>
     : {};
-  const hasTemplates = ['comunicacao', 'operacao', 'gerencia'].some(
+  const hasTemplates = ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'].some(
     (key) => typeof normal[key] === 'string' && (normal[key] as string).trim(),
   );
   if (!hasTemplates) return null;
@@ -62,12 +62,15 @@ function normalizarTemplatesMensagem(valor: unknown): TemplatesMensagem | null {
     gerencia: typeof grupo.gerencia === 'string' && grupo.gerencia.trim()
       ? grupo.gerencia
       : padrao.gerencia,
+    ocorrencias_operacionais: typeof grupo.ocorrencias_operacionais === 'string' && grupo.ocorrencias_operacionais.trim()
+      ? grupo.ocorrencias_operacionais
+      : padrao.ocorrencias_operacionais,
   });
   const modelosNormais = normalizados(normal, TEMPLATES_MENSAGEM_PADRAO);
   modelosNormais.operacao = atualizarCamposPadraoOperacionais(modelosNormais.operacao);
   modelosNormais.gerencia = atualizarCamposPadraoOperacionais(modelosNormais.gerencia);
   const modelosEncerramento = normalizados(encerramento, TEMPLATES_MENSAGEM_PADRAO.encerramento);
-  for (const grupo of ['comunicacao', 'operacao', 'gerencia'] as const) {
+  for (const grupo of ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'] as const) {
     if (!modelosEncerramento[grupo].includes('{{ENTREGA_RESTRICAO}}')) {
       modelosEncerramento[grupo] = `${modelosEncerramento[grupo].trimEnd()}\n{{ENTREGA_RESTRICAO}}`;
     }
@@ -203,10 +206,12 @@ export async function salvarTemplatesMensagem(novosTemplates: TemplatesMensagem)
     comunicacao: novosTemplates.comunicacao.trim() || TEMPLATES_MENSAGEM_PADRAO.comunicacao,
     operacao: novosTemplates.operacao.trim() || TEMPLATES_MENSAGEM_PADRAO.operacao,
     gerencia: novosTemplates.gerencia.trim() || TEMPLATES_MENSAGEM_PADRAO.gerencia,
+    ocorrencias_operacionais: novosTemplates.ocorrencias_operacionais.trim() || TEMPLATES_MENSAGEM_PADRAO.ocorrencias_operacionais,
     encerramento: {
       comunicacao: novosTemplates.encerramento.comunicacao.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.comunicacao,
       operacao: novosTemplates.encerramento.operacao.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.operacao,
       gerencia: novosTemplates.encerramento.gerencia.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.gerencia,
+      ocorrencias_operacionais: novosTemplates.encerramento.ocorrencias_operacionais.trim() || TEMPLATES_MENSAGEM_PADRAO.encerramento.ocorrencias_operacionais,
     },
   };
 

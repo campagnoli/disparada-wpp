@@ -11,6 +11,7 @@ export interface ConfiguracaoWhatsApp {
     comunicacao: string;
     operacao: string;
     gerencia: string;
+    ocorrencias_operacionais: string;
   };
   antiBloqueio: {
     simularDigitacao: boolean;
@@ -38,6 +39,7 @@ export function obterConfiguracaoWhatsAppPadrao(): ConfiguracaoWhatsApp {
       comunicacao: (process.env.GROUP_ID_COMUNICACAO || '120363384961563518@g.us').trim(),
       operacao: (process.env.GROUP_ID_OPERACAO || '120363420044955952@g.us').trim(),
       gerencia: (process.env.GROUP_ID_GERENCIA || '120363305531028865@g.us').trim(),
+      ocorrencias_operacionais: (process.env.GROUP_ID_OCORRENCIAS_OPERACIONAIS || '').trim(),
     },
     antiBloqueio: {
       simularDigitacao: true,
@@ -108,6 +110,7 @@ function mesclarConfig(parcial: Partial<ConfiguracaoWhatsApp>): ConfiguracaoWhat
       comunicacao: parcial.grupos?.comunicacao?.trim() || padrao.grupos.comunicacao,
       operacao: parcial.grupos?.operacao?.trim() || padrao.grupos.operacao,
       gerencia: parcial.grupos?.gerencia?.trim() || padrao.grupos.gerencia,
+      ocorrencias_operacionais: parcial.grupos?.ocorrencias_operacionais?.trim() || padrao.grupos.ocorrencias_operacionais,
     },
     antiBloqueio: {
       simularDigitacao: parcial.antiBloqueio?.simularDigitacao ?? padrao.antiBloqueio.simularDigitacao,

@@ -22,6 +22,7 @@ import {
   Smile,
   TrainFront,
   Users,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   TEMPLATES_MENSAGEM_PADRAO,
@@ -46,7 +47,7 @@ interface DadosTemplatesAPI {
   templatesPadrao: TemplatesMensagem;
 }
 
-type CanalGrupo = 'comunicacao' | 'operacao' | 'gerencia';
+type CanalGrupo = 'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais';
 
 function formatWhatsAppText(text: string): React.ReactNode[] {
   const pattern = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g;
@@ -110,32 +111,32 @@ const TAGS_DISPONIVEIS: Array<{
   desc: string;
   grupos: CanalGrupo[];
 }> = [
-  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{DATA}}', desc: 'Data do evento (DD/MM/AAAA)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{HORA_FIM}}', desc: 'Horário de fim (omitido até o encerramento da ocorrência)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{DURACAO}}', desc: 'Duração da ocorrência (calculada e exibida apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{ENTREGA_RESTRICAO}}', desc: 'Resultado da entrega: sem restrição ou com a descrição informada no encerramento', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{ENCERRAMENTO}}', desc: 'Tag *ENCERRAMENTO* em negrito acima do título (apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{TITULO}}', desc: 'Título da mensagem', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{DATA}}', desc: 'Data do evento (DD/MM/AAAA)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{HORA_INICIO}}', desc: 'Horário de início (HH:MM)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{HORA_FIM}}', desc: 'Horário de fim (omitido até o encerramento da ocorrência)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{DURACAO}}', desc: 'Duração da ocorrência (calculada e exibida apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{ENTREGA_RESTRICAO}}', desc: 'Resultado da entrega: sem restrição ou com a descrição informada no encerramento', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{ENCERRAMENTO}}', desc: 'Tag *ENCERRAMENTO* em negrito acima do título (apenas após encerramento)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
   { tag: '{{ROTULO_INFORMANTE}}', desc: 'Rótulo dinâmico: Trem que informa ou Estação que informa', grupos: ['operacao', 'gerencia'] },
   { tag: '{{TREM_ESTACAO_INFORMA}}', desc: 'Trem ou estação informante', grupos: ['operacao', 'gerencia'] },
-  { tag: '{{ROTULO_LOCALIDADE_AFETADA}}', desc: 'Rótulo dinâmico: Trecho afetado ou Estação afetada', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{TRECHO_ESTACAO_AFETADOS}}', desc: 'Localidade e trecho afetado', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{RESUMO_LOOPS}}', desc: 'Estratégia de loops (omitido se não houver loop)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{ROTULO_LOCALIDADE_AFETADA}}', desc: 'Rótulo dinâmico: Trecho afetado ou Estação afetada', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{TRECHO_ESTACAO_AFETADOS}}', desc: 'Localidade e trecho afetado', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{RESUMO_LOOPS}}', desc: 'Estratégia de loops (omitido se não houver loop)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
   { tag: '{{CLASSIFICACAO}}', desc: 'Classificação da ocorrência (omitido se vazia)', grupos: ['operacao', 'gerencia'] },
   { tag: '{{FALHA}}', desc: 'Descrição técnica da falha', grupos: ['operacao', 'gerencia'] },
   { tag: '{{IMPACTO}}', desc: 'Impacto operacional imediato', grupos: ['operacao', 'gerencia'] },
-  { tag: '{{TEM_IMPACTO_OUTRA_LINHA}}', desc: 'Indica se houve impacto em outra linha (Sim/Não)', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{LINHA_SECUNDARIA_AFETADA}}', desc: 'Nome(s) da(s) linha(s) secundária(s) afetada(s), omitido se vazio', grupos: ['operacao', 'gerencia', 'comunicacao'] },
-  { tag: '{{IMPACTO_SECUNDARIO}}', desc: 'Descrição do impacto reflexo, omitida se vazia', grupos: ['operacao', 'gerencia', 'comunicacao'] },
+  { tag: '{{TEM_IMPACTO_OUTRA_LINHA}}', desc: 'Indica se houve impacto em outra linha (Sim/Não)', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{LINHA_SECUNDARIA_AFETADA}}', desc: 'Nome(s) da(s) linha(s) secundária(s) afetada(s), omitido se vazio', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
+  { tag: '{{IMPACTO_SECUNDARIO}}', desc: 'Descrição do impacto reflexo, omitida se vazia', grupos: ['operacao', 'gerencia', 'comunicacao', 'ocorrencias_operacionais'] },
   { tag: '{{ACOES}}', desc: 'Ações imediatas do CCO e áreas acionadas', grupos: ['operacao', 'gerencia'] },
   { tag: '{{TEXTO_COMUNICACAO}}', desc: 'Texto narrativo gerado pela IA para passageiros', grupos: ['comunicacao'] },
-  { tag: '{{LINHA}}', desc: 'Nome da linha operacional', grupos: ['comunicacao', 'operacao', 'gerencia'] },
-  { tag: '{{SCO}}', desc: 'Assinatura do SCO (supervisor responsável)', grupos: ['comunicacao', 'operacao', 'gerencia'] },
+  { tag: '{{LINHA}}', desc: 'Nome da linha operacional', grupos: ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'] },
+  { tag: '{{SCO}}', desc: 'Assinatura do SCO (supervisor responsável)', grupos: ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'] },
   { tag: '{{IN}}', desc: 'Tipo de IN selecionado (ex: "IN Tipo B"), ou "Não" se nenhum tipo for selecionado', grupos: ['operacao', 'gerencia'] },
   { tag: '{{COPESE}}', desc: 'Indica se a classificação COPESE foi selecionada (ex: "Sim")', grupos: ['operacao', 'gerencia'] },
   { tag: '{{DESEMBARQUE}}', desc: 'Impacto a passageiros que desembarcam ("Sim"/"Não") e o que foi observado', grupos: ['operacao', 'gerencia'] },
-  { tag: '{{DESCRITIVO}}', desc: 'Narrativa completa do que ocorreu, campo opcional', grupos: ['operacao', 'gerencia'] },
+  { tag: '{{DESCRITIVO}}', desc: 'Narrativa completa do que ocorreu, campo opcional', grupos: ['operacao', 'gerencia', 'ocorrencias_operacionais'] },
 ];
 
 export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: AdminTemplatesProps) {
@@ -378,11 +379,13 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
     comunicacao: 'CCO - Comunicação Linha 11',
     operacao: 'Operação CCO / Executivo',
     gerencia: 'Gerência / Órgão Regulador',
+    ocorrencias_operacionais: 'Ocorrências Operacionais',
   }[canalAtivo];
   const nomeGrupo = {
     comunicacao: 'Comunicação / Imprensa / Passageiros',
     operacao: 'Operação CCO / Executivo',
     gerencia: 'Gerência / Órgão Regulador',
+    ocorrencias_operacionais: 'Ocorrências Operacionais',
   }[canalAtivo];
   const horaPreview = new Intl.DateTimeFormat('pt-BR', {
     hour: '2-digit',
@@ -536,6 +539,19 @@ export default function AdminTemplates({ onNotificarErro, onNotificarSucesso }: 
         >
           <MessageSquare className="h-4 w-4" />
           Grupo Comunicação (Imprensa / Passageiros)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCanalAtivo('ocorrencias_operacionais')}
+          className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+            canalAtivo === 'ocorrencias_operacionais'
+              ? 'border-amber-500 text-amber-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <AlertTriangle className="h-4 w-4" />
+          Grupo Ocorrências Operacionais
         </button>
       </div>
 

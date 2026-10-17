@@ -7,6 +7,7 @@ import { isModeloGemini } from '@/lib/gemini-models';
 import { obterPromptSistemaAtivo, montarSystemInstruction } from '@/lib/gemini-prompt';
 import { obterTemplatesMensagemAtivos, aplicarTemplateMensagem } from '@/lib/mensagem-templates';
 import { aplicarRotulosCondicionaisMensagem } from '@/lib/mensagem-templates-pure';
+import { formatarMensagemOcorrencia } from '@/lib/formatadores/ocorrenciaOperacional';
 import {
   formatarClassificacoes,
   isClassificacaoOcorrencia,
@@ -579,8 +580,12 @@ ${exemplosFewShot}`;
               },
               required: ['titulo', 'falha', 'impacto', 'acoes'],
             },
+            ocorrencias_operacionais: {
+              type: Type.STRING,
+              description: 'Mensagem no modelo obrigatório de ocorrências operacionais com os campos *LINHA:* *OCORRÊNCIA:* *LOCAL:* *HORÁRIO:* *DESCRITIVO:* *CRONOLOGIA:* #AAS/ASL: #CPS:. Deve conter a cronologia formatada com horários e eventos, mesmo que inicialmente "Em apuração inicial".',
+            },
           },
-          required: ['comunicacao', 'operacao', 'gerencia'],
+          required: ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'],
         },
       },
     };
@@ -720,6 +725,35 @@ ${exemplosFewShot}`;
       throw new Error('O Gemini retornou formato inválido para a mensagem de gerência.');
     }
 
+    // 5. Geração da mensagem do 4º grupo: Ocorrências Operacionais (modelo obrigatório)
+    let msgOcorrenciasOperacionais: string;
+    const textoOcBruto = typeof payload.ocorrencias_operacionais === 'string' ? payload.ocorrencias_operacionais : '';
+    if (textoOcBruto.trim()) {
+      msgOcorrenciasOperacionais = textoOcBruto.trim();
+    } else {
+      // Fallback: monta o modelo obrigatório com os dados da ocorrência
+      const cronologiaItens = Array.isArray(dadosOcorrencia.cronologia) ? dadosOcorrencia.cronologia : [];
+      msgOcorrenciasOperacionais = formatarMensagemOcorrencia({
+        linha,
+        tipoOcorrencia: typeof dadosOcorrencia.tipo_ocorrencia === 'string' ? dadosOcorrencia.tipo_ocorrencia : 'Ocorrência Operacional',
+        local: localidade,
+        horario: horaInicio || 'Não informado',
+        descritivo: typeof dadosOcorrencia.descritivo === 'string' ? dadosOcorrencia.descritivo : typeof dadosOcorrencia.falha === 'string' ? dadosOcorrencia.falha : '',
+        cronologia: cronologiaItens.map((item: unknown) => {
+          if (isRecord(item)) {
+            return {
+              id: typeof item.id === 'string' ? item.id : undefined,
+              horario: typeof item.horario === 'string' ? item.horario : '',
+              texto: typeof item.texto === 'string' ? item.texto : '',
+            };
+          }
+          return { horario: '', texto: '' };
+        }).filter((item) => Boolean(item.horario && item.texto)),
+        aasAsl: typeof dadosOcorrencia.aas_asl === 'string' ? dadosOcorrencia.aas_asl : undefined,
+        cps: typeof dadosOcorrencia.cps === 'string' ? dadosOcorrencia.cps : undefined,
+      });
+    }
+
     const textoComunicacaoBruto = typeof payload.comunicacao === 'string' ? payload.comunicacao : '';
     const msgComunicacao = aplicarTemplateMensagem(templatesAtivos.comunicacao, {
       titulo: `INFORME CCO - ${linha.toUpperCase()}`,
@@ -764,6 +798,7 @@ ${exemplosFewShot}`;
       comunicacao: incluirInformacoesOperacionais(msgComunicacao, [informacaoPaese]),
       operacao: incluirInformacoesOperacionais(msgOperacao, [informacaoPaese, informacaoApoioMRS]),
       gerencia: incluirInformacoesOperacionais(msgGerencia, [informacaoPaese, informacaoApoioMRS]),
+      ocorrencias_operacionais: msgOcorrenciasOperacionais,
     });
   } catch (error: unknown) {
     console.error('--- ERRO DETALHADO DO GEMINI ---');

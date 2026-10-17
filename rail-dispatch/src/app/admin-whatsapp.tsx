@@ -46,7 +46,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
     erro?: string;
   } | null>(null);
 
-  const [canalTeste, setCanalTeste] = useState<'comunicacao' | 'operacao' | 'gerencia' | 'personalizado'>('operacao');
+  const [canalTeste, setCanalTeste] = useState<'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais' | 'personalizado'>('operacao');
   const [jidPersonalizado, setJidPersonalizado] = useState('');
   const [textoTeste, setTextoTeste] = useState(
     '🧪 *Teste de Conexão CCO - SIDO*\nDisparo de teste operacional via Evolution API realizado com sucesso!'
@@ -62,6 +62,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
       comunicacao: '120363384961563518@g.us',
       operacao: '120363420044955952@g.us',
       gerencia: '120363305531028865@g.us',
+      ocorrencias_operacionais: '',
     },
     antiBloqueio: {
       simularDigitacao: true,
@@ -469,6 +470,26 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
                   }))
                 }
                 placeholder="ex: 120363305531028865@g.us"
+                className="w-full form-control font-mono text-xs"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="jid-ocorrencias-operacionais" className="form-label text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Grupo Ocorrências Operacionais</span>
+                <span className="badge badge-amber text-[10px]">Canal 4</span>
+              </label>
+              <input
+                id="jid-ocorrencias-operacionais"
+                type="text"
+                value={config.grupos.ocorrencias_operacionais}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    grupos: { ...prev.grupos, ocorrencias_operacionais: e.target.value },
+                  }))
+                }
+                placeholder="ex: 120363123456789012@g.us"
                 className="w-full form-control font-mono text-xs"
               />
             </div>

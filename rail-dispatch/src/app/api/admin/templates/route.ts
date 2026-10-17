@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
       typeof rawTemplates.gerencia === 'string' && rawTemplates.gerencia.trim().length > 0
         ? rawTemplates.gerencia.trim()
         : TEMPLATES_MENSAGEM_PADRAO.gerencia,
+    ocorrencias_operacionais:
+      typeof rawTemplates.ocorrencias_operacionais === 'string' && rawTemplates.ocorrencias_operacionais.trim().length > 0
+        ? rawTemplates.ocorrencias_operacionais.trim()
+        : TEMPLATES_MENSAGEM_PADRAO.ocorrencias_operacionais,
     encerramento: {
       comunicacao:
         typeof rawEncerramento.comunicacao === 'string' && rawEncerramento.comunicacao.trim().length > 0
@@ -122,6 +126,10 @@ export async function POST(request: NextRequest) {
         typeof rawEncerramento.gerencia === 'string' && rawEncerramento.gerencia.trim().length > 0
           ? rawEncerramento.gerencia.trim()
           : TEMPLATES_MENSAGEM_PADRAO.encerramento.gerencia,
+      ocorrencias_operacionais:
+        typeof rawEncerramento.ocorrencias_operacionais === 'string' && rawEncerramento.ocorrencias_operacionais.trim().length > 0
+          ? rawEncerramento.ocorrencias_operacionais.trim()
+          : TEMPLATES_MENSAGEM_PADRAO.encerramento.ocorrencias_operacionais,
     },
   };
 

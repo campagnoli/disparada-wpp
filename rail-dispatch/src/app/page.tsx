@@ -76,7 +76,10 @@ interface Mensagens {
   comunicacao: string;
   operacao: string;
   gerencia: string;
+  ocorrencias_operacionais: string;
 }
+
+type MensagensTradicionais = Pick<Mensagens, 'comunicacao' | 'operacao' | 'gerencia'>;
 
 interface FalhaSelecionada {
   chave: string;
@@ -529,6 +532,7 @@ export default function DespachoOcorrencias() {
           comunicacao: modelos.comunicacao,
           operacao: modelos.operacao,
           gerencia: modelos.gerencia,
+          ocorrencias_operacionais: modelos.ocorrencias_operacionais ?? TEMPLATES_MENSAGEM_PADRAO.encerramento.ocorrencias_operacionais,
         });
         setErroTemplatesEncerramento('');
       } catch (error: unknown) {
@@ -759,26 +763,32 @@ export default function DespachoOcorrencias() {
     comunicacao: '',
     operacao: '',
     gerencia: '',
+    ocorrencias_operacionais: '',
   });
+  const [mensagemOcorrenciaOperacional, setMensagemOcorrenciaOperacional] = useState('');
   const [mensagensGemini, setMensagensGemini] = useState<Mensagens | null>(null);
   const [dadosOcorrenciaGerada, setDadosOcorrenciaGerada] = useState<Record<string, unknown> | null>(null);
   const [gruposSelecionados, setGruposSelecionados] = useState<{
     comunicacao: boolean;
     operacao: boolean;
     gerencia: boolean;
+    ocorrencias_operacionais: boolean;
   }>({
     comunicacao: true,
     operacao: true,
     gerencia: true,
+    ocorrencias_operacionais: true,
   });
   const [gruposRedisparo, setGruposRedisparo] = useState<{
     comunicacao: boolean;
     operacao: boolean;
     gerencia: boolean;
+    ocorrencias_operacionais: boolean;
   }>({
     comunicacao: true,
     operacao: true,
     gerencia: true,
+    ocorrencias_operacionais: true,
   });
   const [disparandoCanal, setDisparandoCanal] = useState<string | null>(null);
 
@@ -987,7 +997,9 @@ export default function DespachoOcorrencias() {
           horaInicio.trim().length > 0 ||
           gruposSelecionados.comunicacao ||
           gruposSelecionados.operacao ||
-          gruposSelecionados.gerencia
+          gruposSelecionados.gerencia ||
+          gruposSelecionados.ocorrencias_operacionais ||
+          Boolean(mensagemOcorrenciaOperacional.trim())
       );
       if (temPreenchimento && !codigoEventoAtual && !disparoRealizado) {
         e.preventDefault();
@@ -1338,6 +1350,7 @@ export default function DespachoOcorrencias() {
       }
       const data: Mensagens = await res.json();
       setMensagens(data);
+      setMensagemOcorrenciaOperacional(data.ocorrencias_operacionais);
       setMensagensGemini(data);
       setDadosOcorrenciaGerada(dadosOcorrencia);
       setCodigoEventoAtual(null);
@@ -1371,7 +1384,7 @@ export default function DespachoOcorrencias() {
    * Registra uma nova ocorrência (POST) ou sincroniza uma existente (PATCH) no Supabase.
    * Usado tanto no salvamento manual quanto no salvamento automático pós-disparo WhatsApp.
    */
-  const salvarOcorrenciaInterna = async (textosParaSalvar?: Mensagens): Promise<string> => {
+  const salvarOcorrenciaInterna = async (textosParaSalvar?: MensagensTradicionais): Promise<string> => {
     const mensagensAlvo = textosParaSalvar ?? (abaAtiva === 'historico' ? msgFimEditada : mensagens);
 
     // 1. Cenário: Estamos na aba de histórico com ocorrência já selecionada (PATCH)
@@ -1701,23 +1714,23 @@ export default function DespachoOcorrencias() {
   };
 
   const handleDispararWhatsApp = async (
-    textos: { comunicacao: string; operacao: string; gerencia: string },
-    gruposAlvo?: Array<'comunicacao' | 'operacao' | 'gerencia'>,
-    mensagensCompletasParaSalvar?: { comunicacao: string; operacao: string; gerencia: string }
+    textos: MensagensTradicionais,
+    gruposAlvo?: Array<'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais'>,
+    mensagensCompletasParaSalvar?: MensagensTradicionais
   ) => {
-    const gruposParaEnviar: Array<'comunicacao' | 'operacao' | 'gerencia'> =
+    const gruposParaEnviar: Array<'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais'> =
       gruposAlvo ??
       (
         Object.entries(gruposSelecionados)
           .filter(([, selecionado]) => selecionado)
-          .map(([grupo]) => grupo as 'comunicacao' | 'operacao' | 'gerencia')
+          .map(([grupo]) => grupo as 'comunicacao' | 'operacao' | 'gerencia' | 'ocorrencias_operacionais')
       );
 
     if (gruposParaEnviar.length === 0) {
       exibirModal({
         tipo: 'aviso',
         titulo: 'Nenhum Grupo Selecionado',
-        mensagem: 'Por favor, selecione ao menos um grupo do WhatsApp (Comunicação, Operação CCO / Executivo ou Gerência / Órgão Regulador) para realizar o disparo.',
+        mensagem: 'Por favor, selecione ao menos um grupo do WhatsApp (Comunicação, Operação CCO / Executivo, Gerência / Órgão Regulador ou Ocorrências Operacionais) para realizar o disparo.',
         dica: 'Marque a caixa de seleção do grupo desejado antes de clicar no botão de disparo.',
         textoBotaoConfirmar: 'Selecionar Grupos',
       });
@@ -1733,6 +1746,9 @@ export default function DespachoOcorrencias() {
     }
     if (gruposParaEnviar.includes('gerencia') && !textos.gerencia.trim()) {
       faltantes.push('Gerência / Órgão Regulador');
+    }
+    if (gruposParaEnviar.includes('ocorrencias_operacionais') && !mensagemOcorrenciaOperacional.trim()) {
+      faltantes.push('Ocorrências Operacionais');
     }
 
     if (faltantes.length > 0) {
@@ -1755,6 +1771,15 @@ export default function DespachoOcorrencias() {
       && dadosOcorrenciaGerada
     ) {
       const exemplos = gruposParaEnviar.flatMap((tipoGrupo) => {
+        if (tipoGrupo === 'ocorrencias_operacionais') {
+          if (!mensagemOcorrenciaOperacional.trim()) return [];
+          return [{
+            tipo_grupo: 'operacao',
+            mensagem_ia: mensagemOcorrenciaOperacional,
+            mensagem_final_sco: mensagemOcorrenciaOperacional,
+            houve_edicao: true,
+          }];
+        }
         const mensagemFinal = mensagensFinais[tipoGrupo];
         const mensagemSugerida = mensagensGemini[tipoGrupo];
         if (!mensagemFinal.trim()) return [];
@@ -1782,26 +1807,75 @@ export default function DespachoOcorrencias() {
     }
 
     try {
-      const res = await fetch('/api/disparar-wpp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mensagens: textos,
-          grupos: gruposParaEnviar,
-        }),
-      });
+      // Disparo nos 3 grupos tradicionais via Evolution API (rota geral)
+      const gruposTradicionais = gruposParaEnviar.filter((g) => g !== 'ocorrencias_operacionais');
+      let disparoOcorrenciaOperacional: { sucesso: boolean; mensagem?: string } = { sucesso: true };
+      let dataDisparo: { mensagem?: string } | null = null;
 
-      const data = (await res.json().catch(() => null)) as {
-        sucesso?: boolean;
-        mensagem?: string;
-        error?: string;
-        sucessos?: number;
-        falhas?: number;
-        resultados?: Array<{ grupo: string; status: 'sucesso' | 'erro'; detalhe: unknown }>;
-      } | null;
+      if (gruposTradicionais.length > 0) {
+        const res = await fetch('/api/disparar-wpp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensagens: textos,
+            grupos: gruposTradicionais,
+          }),
+        });
 
-      if (!res.ok || !data?.sucesso) {
-        throw new Error(data?.error || data?.mensagem || 'Falha ao despachar mensagens via Evolution API.');
+        const data = (await res.json().catch(() => null)) as {
+          sucesso?: boolean;
+          mensagem?: string;
+          error?: string;
+          sucessos?: number;
+          falhas?: number;
+          resultados?: Array<{ grupo: string; status: 'sucesso' | 'erro'; detalhe: unknown }>;
+        } | null;
+
+        if (!res.ok || !data?.sucesso) {
+          throw new Error(data?.error || data?.mensagem || 'Falha ao despachar mensagens via Evolution API.');
+        }
+        dataDisparo = data;
+      }
+
+      // Disparo separado para o grupo Ocorrências Operacionais (rota própria com groupId configurável)
+      if (gruposParaEnviar.includes('ocorrencias_operacionais') && mensagemOcorrenciaOperacional.trim()) {
+        try {
+          const tipoOc = 'Ocorrência Operacional';
+          const localOc = tipoLocalidade === 'trecho' && localidadeFim
+            ? `${localidadeInicio} - ${localidadeFim}`
+            : localidadeInicio;
+
+          const resOc = await fetch('/api/ocorrencias-operacionais', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              linha,
+              tipoOcorrencia: tipoOc,
+              local: localOc,
+              horario: horaInicio,
+              descritivo: falha,
+              cronologia: [],
+              aasAsl: '',
+              cps: '',
+              status: 'em_andamento',
+              groupIdWhatsApp: '',
+              dispararWhatsApp: true,
+              houveEdicaoManual: true,
+            }),
+          });
+          const dataOc = (await resOc.json().catch(() => null)) as { sucesso?: boolean; mensagemFormatada?: string; error?: string; id?: string } | null;
+          if (!resOc.ok || !dataOc?.sucesso) {
+            disparoOcorrenciaOperacional = { sucesso: false, mensagem: dataOc?.error || 'Falha ao disparar Ocorrências Operacionais.' };
+          } else {
+            disparoOcorrenciaOperacional = { sucesso: true, mensagem: `Ocorrência operacional registrada (ID: ${dataOc?.id || '—'})` };
+            setMensagemOcorrenciaOperacional(dataOc.mensagemFormatada || mensagemOcorrenciaOperacional);
+          }
+        } catch (errOc: unknown) {
+          disparoOcorrenciaOperacional = {
+            sucesso: false,
+            mensagem: errOc instanceof Error ? errOc.message : 'Falha ao disparar Ocorrências Operacionais.',
+          };
+        }
       }
 
       // Salvamento automático no histórico (Supabase) após o disparo com sucesso
@@ -1822,7 +1896,7 @@ export default function DespachoOcorrencias() {
         exibirModal({
           tipo: 'sucesso',
           titulo: 'Disparo Concluído e Ocorrência Salva!',
-          mensagem: `Mensagens enviadas com sucesso no WhatsApp e **registradas automaticamente no histórico sob o ID de evento ${codigoEventoSalvo}**.`,
+          mensagem: `Mensagens enviadas com sucesso no WhatsApp e **registradas automaticamente no histórico sob o ID de evento ${codigoEventoSalvo}**.${disparoOcorrenciaOperacional.mensagem ? '\n\n' + disparoOcorrenciaOperacional.mensagem : ''}`,
           dica: 'O histórico foi sincronizado. Você pode acompanhar, atualizar o encerramento ou redisparar mensagens na aba Histórico.',
           textoBotaoConfirmar: 'OK',
         });
@@ -1830,7 +1904,7 @@ export default function DespachoOcorrencias() {
         exibirModal({
           tipo: 'sucesso',
           titulo: 'Disparo Concluído no WhatsApp!',
-          mensagem: data.mensagem || 'Mensagens despachadas com sucesso nos grupos selecionados do CCO via Evolution API.',
+          mensagem: dataDisparo?.mensagem || 'Mensagens despachadas com sucesso nos grupos selecionados do CCO via Evolution API.',
           dica: erroAoSalvar
             ? `Nota: Ocorreu uma instabilidade ao salvar automaticamente (${erroAoSalvar}). Você pode clicar em "Salvar mensagens" para registrar no histórico.`
             : 'Os informes foram transmitidos aos canais selecionados com sucesso.',
@@ -1901,6 +1975,93 @@ export default function DespachoOcorrencias() {
     navigator.clipboard.writeText(texto);
     setCopiado(chave);
     setTimeout(() => setCopiado(null), 2000);
+  };
+
+  const copiarTextoOcorrenciaOperacional = () => {
+    navigator.clipboard.writeText(mensagemOcorrenciaOperacional);
+    setCopiado('ocorrencias_operacionais');
+    setTimeout(() => setCopiado(null), 2000);
+  };
+
+  const handleDispararOcorrenciaOperacional = async () => {
+    if (!mensagemOcorrenciaOperacional.trim()) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Mensagem em Branco',
+        mensagem: 'A mensagem para o grupo Ocorrências Operacionais está em branco.',
+        dica: 'Preencha o texto do modelo de ocorrência operacional antes de disparar.',
+        textoBotaoConfirmar: 'Entendido',
+      });
+      return;
+    }
+
+    setDisparandoWpp(true);
+    setDisparandoCanal('ocorrencias_operacionais');
+
+    try {
+      // O frontend já possui a interface de preenchimento do modelo de ocorrência operacional.
+      // Aqui enviamos o texto já formatado para a API de backend, que grava e dispara via Evolution API.
+      const tipoOc = 'Ocorrência Operacional';
+      const localOc = tipoLocalidade === 'trecho' && localidadeFim
+        ? `${localidadeInicio} - ${localidadeFim}`
+        : localidadeInicio;
+
+      const res = await fetch('/api/ocorrencias-operacionais', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          linha: linha,
+          tipoOcorrencia: tipoOc,
+          local: localOc,
+          horario: horaInicio,
+          descritivo: falha,
+          cronologia: [],
+          aasAsl: '',
+          cps: '',
+          status: 'em_andamento',
+          groupIdWhatsApp: '',
+          dispararWhatsApp: true,
+          houveEdicaoManual: true,
+        }),
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        sucesso?: boolean;
+        id?: string;
+        mensagemFormatada?: string;
+        error?: string;
+        whatsapp?: { sucesso: boolean; messageId?: string; remoteJid?: string; erro?: string };
+      } | null;
+
+      if (!res.ok || !data?.sucesso) {
+        throw new Error(data?.error || 'Falha ao disparar ocorrência operacional.');
+      }
+
+      setMensagemOcorrenciaOperacional(data.mensagemFormatada || mensagemOcorrenciaOperacional);
+      setDisparoRealizado(true);
+
+      exibirModal({
+        tipo: 'sucesso',
+        titulo: 'Ocorrência Operacional Disparada',
+        mensagem: `A ocorrência foi registrada e disparada no grupo Ocorrências Operacionais com sucesso (ID: ${data.id || '—'}).`,
+        dica: data.whatsapp?.messageId
+          ? `ID da mensagem WhatsApp: ${data.whatsapp.messageId}`
+          : 'Verifique o grupo para confirmação do recebimento.',
+        textoBotaoConfirmar: 'OK',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha inesperada ao disparar ocorrência operacional.';
+      exibirModal({
+        tipo: 'erro',
+        titulo: 'Falha ao Disparar',
+        mensagem: msg,
+        dica: 'Verifique se a Evolution API está online e se o ID do grupo Ocorrências Operacionais está configurado.',
+        textoBotaoConfirmar: 'Entendido',
+      });
+    } finally {
+      setDisparandoWpp(false);
+      setDisparandoCanal(null);
+    }
   };
 
   /**
@@ -3687,7 +3848,7 @@ export default function DespachoOcorrencias() {
                       ]);
                       setEtapaAtiva('iniciais');
                       setHoraInicio('');
-                      setMensagens({ comunicacao: '', operacao: '', gerencia: '' });
+                      setMensagens({ comunicacao: '', operacao: '', gerencia: '', ocorrencias_operacionais: '' });
                       setCodigoEventoAtual(null);
                       setDisparoRealizado(false);
                       setErroBusca('');
@@ -3784,6 +3945,16 @@ export default function DespachoOcorrencias() {
                   <span>Gerência / Órgão Regulador</span>
                 </label>
 
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-amber-600 hover:opacity-80 transition-opacity">
+                  <input
+                    type="checkbox"
+                    checked={gruposSelecionados.ocorrencias_operacionais}
+                    onChange={(e) => setGruposSelecionados((prev) => ({ ...prev, ocorrencias_operacionais: e.target.checked }))}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>Ocorrências Operacionais</span>
+                </label>
+
                 <div className="h-4 w-px bg-slate-200 hidden sm:block" />
 
                 <button
@@ -3792,11 +3963,13 @@ export default function DespachoOcorrencias() {
                     const todosMarcados =
                       gruposSelecionados.comunicacao &&
                       gruposSelecionados.operacao &&
-                      gruposSelecionados.gerencia;
+                      gruposSelecionados.gerencia &&
+                      gruposSelecionados.ocorrencias_operacionais;
                     setGruposSelecionados({
                       comunicacao: !todosMarcados,
                       operacao: !todosMarcados,
                       gerencia: !todosMarcados,
+                      ocorrencias_operacionais: !todosMarcados,
                     });
                   }}
                   className="text-[11px] text-slate-500 hover:text-safira font-medium underline"
@@ -3919,6 +4092,43 @@ export default function DespachoOcorrencias() {
               />
             </div>
 
+            {/* Card 4: Ocorrências Operacionais */}
+            <div className="border border-slate-300 bg-amber-50 p-3 space-y-2 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-amber-600">Grupo: Ocorrências Operacionais</span>
+                  <p className="text-xs text-slate-500">Modelo obrigatório de ocorrência operacional (Linha, Ocorrência, Local, Horário, Descritivo, Cronologia, AAS/ASL, CPS)</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleDispararOcorrenciaOperacional()}
+                    disabled={!mensagemOcorrenciaOperacional || disparandoWpp}
+                    className="btn btn-secondary btn-sm flex items-center gap-1 text-xs text-amber-600 hover:bg-amber-100 disabled:opacity-30"
+                    title="Disparar apenas neste grupo"
+                  >
+                    <Send className={`w-3.5 h-3.5 ${disparandoCanal === 'ocorrencias_operacionais' ? 'animate-pulse' : ''}`} />
+                    <span className="hidden sm:inline">Disparar grupo</span>
+                  </button>
+                  <button
+                    onClick={() => copiarTextoOcorrenciaOperacional()}
+                    disabled={!mensagemOcorrenciaOperacional}
+                    className="btn btn-secondary btn-sm disabled:opacity-30"
+                    title="Copiar texto"
+                  >
+                    {copiado === 'ocorrencias_operacionais' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                rows={4}
+                value={mensagemOcorrenciaOperacional}
+                onChange={(e) => setMensagemOcorrenciaOperacional(e.target.value)}
+                placeholder="Aguardando geração do modelo de ocorrência operacional..."
+                className="w-full form-control font-sans font-mono text-[11px]"
+              />
+            </div>
+
             <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -3937,6 +4147,7 @@ export default function DespachoOcorrencias() {
                   (!gruposSelecionados.comunicacao || Boolean(mensagens.comunicacao)) &&
                   (!gruposSelecionados.operacao || Boolean(mensagens.operacao)) &&
                   (!gruposSelecionados.gerencia || Boolean(mensagens.gerencia)) &&
+                  (!gruposSelecionados.ocorrencias_operacionais || Boolean(mensagemOcorrenciaOperacional)) &&
                   !disparandoWpp;
 
                 const textoBotao =
@@ -3944,17 +4155,21 @@ export default function DespachoOcorrencias() {
                     ? 'Disparando no WhatsApp...'
                     : qtdSelecionada === 0
                     ? 'Selecione ao menos 1 grupo'
+                    : qtdSelecionada === 4
+                    ? 'Disparar nos 4 Grupos Selecionados'
                     : qtdSelecionada === 3
                     ? 'Disparar nos 3 Grupos Selecionados'
-                    : qtdSelecionada === 1
-                    ? `Disparar no Grupo ${
+                    : qtdSelecionada === 2
+                    ? 'Disparar nos 2 Grupos Selecionados'
+                    : `Disparar no Grupo ${
                         gruposSelecionados.comunicacao
                           ? 'Comunicação'
                           : gruposSelecionados.operacao
-                          ? 'Operação'
-                          : 'Gerência'
-                      }`
-                    : `Disparar nos 2 Grupos Selecionados`;
+                          ? 'Operação CCO / Executivo'
+                          : gruposSelecionados.gerencia
+                          ? 'Gerência / Órgão Regulador'
+                          : 'Ocorrências Operacionais'
+                      }`;
 
                 return (
                   <button
