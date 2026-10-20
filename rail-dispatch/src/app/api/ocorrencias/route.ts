@@ -382,6 +382,109 @@ export async function PATCH(request: Request) {
 	}
 }
 
+interface OcorrenciaExcluida {
+	codigo_evento: string | null;
+	linha: string | null;
+	localidade: string | null;
+	hora_inicio: string | null;
+	falha: string | null;
+	created_at: string | null;
+}
+
+interface ResultadoLimpezaOperacional {
+	excluidas: number;
+	falhou: boolean;
+}
+
+function localCompativel(localOperacional: unknown, localTradicional: unknown): boolean {
+	const operacional = typeof localOperacional === 'string' ? localOperacional.trim() : '';
+	const tradicional = typeof localTradicional === 'string' ? localTradicional.trim() : '';
+	if (!operacional || !tradicional) return false;
+	return tradicional === operacional || tradicional.startsWith(`${operacional} - `);
+}
+
+/**
+ * Remove os registros de Ocorrências Operacionais vinculados às ocorrências
+ * tradicionais excluídas. O vínculo por codigo_evento cobre os registros novos;
+ * o fallback por linha/horário/descritivo/local cobre os registros antigos,
+ * criados antes da coluna codigo_evento.
+ */
+async function excluirOperacionaisVinculadas(
+	admin: ReturnType<typeof createSupabaseAdminClient>,
+	alvos: OcorrenciaExcluida[],
+): Promise<ResultadoLimpezaOperacional> {
+	const ids = new Set<string>();
+	let falhou = false;
+
+	const codigos = [...new Set(
+		alvos
+			.map((item) => item.codigo_evento)
+			.filter((codigo): codigo is string => Boolean(codigo)),
+	)];
+
+	if (codigos.length > 0) {
+		const { data, error } = await admin
+			.from('ocorrencias_operacionais')
+			.select('id')
+			.in('codigo_evento', codigos);
+
+		if (error) {
+			// A coluna pode não existir em ambientes que ainda não aplicaram a migration 005.
+			if (error.code !== 'PGRST204' && error.code !== '42703') {
+				console.error('Falha ao buscar ocorrências operacionais vinculadas:', error.message);
+				falhou = true;
+			}
+		} else {
+			for (const item of data ?? []) {
+				if (item.id) ids.add(String(item.id));
+			}
+		}
+	}
+
+	const linhas = [...new Set(alvos.map((item) => item.linha).filter((valor): valor is string => Boolean(valor)))];
+	const horarios = [...new Set(alvos.map((item) => item.hora_inicio).filter((valor): valor is string => Boolean(valor)))];
+	const descritivos = [...new Set(alvos.map((item) => item.falha).filter((valor): valor is string => Boolean(valor)))];
+
+	if (linhas.length > 0 && horarios.length > 0 && descritivos.length > 0) {
+		const { data, error } = await admin
+			.from('ocorrencias_operacionais')
+			.select('id, linha, local, horario, descritivo')
+			.in('linha', linhas)
+			.in('horario', horarios)
+			.in('descritivo', descritivos);
+
+		if (error) {
+			console.error('Falha ao buscar ocorrências operacionais legadas:', error.message);
+			falhou = true;
+		} else {
+			for (const operacional of data ?? []) {
+				const corresponde = alvos.some((alvo) =>
+					alvo.linha === operacional.linha
+					&& alvo.hora_inicio === operacional.horario
+					&& alvo.falha === operacional.descritivo
+					&& localCompativel(operacional.local, alvo.localidade),
+				);
+				if (corresponde) ids.add(String(operacional.id));
+			}
+		}
+	}
+
+	if (ids.size === 0) return { excluidas: 0, falhou };
+
+	const { data, error } = await admin
+		.from('ocorrencias_operacionais')
+		.delete()
+		.in('id', [...ids])
+		.select('id');
+
+	if (error) {
+		console.error('Falha ao excluir ocorrências operacionais vinculadas:', error.message);
+		return { excluidas: 0, falhou: true };
+	}
+
+	return { excluidas: data?.length ?? 0, falhou };
+}
+
 export async function DELETE(request: Request) {
 	let body: unknown;
 
@@ -416,11 +519,12 @@ export async function DELETE(request: Request) {
 	}
 
 	try {
-		const { data: excluidas, error } = await createSupabaseAdminClient()
+		const admin = createSupabaseAdminClient();
+		const { data: excluidas, error } = await admin
 			.from('ocorrencias')
 			.delete()
 			.in('codigo_evento', codigosLimpos)
-			.select('codigo_evento');
+			.select('codigo_evento, linha, localidade, hora_inicio, falha, created_at');
 
 		if (error) {
 			console.error('Falha ao excluir ocorrências:', error.message);
@@ -430,7 +534,11 @@ export async function DELETE(request: Request) {
 			);
 		}
 
-		const codigosExcluidos = (excluidas ?? []).map((item) => item.codigo_evento);
+		const registrosExcluidos = (excluidas ?? []) as OcorrenciaExcluida[];
+		const codigosExcluidos = registrosExcluidos
+			.map((item) => item.codigo_evento)
+			.filter((codigo): codigo is string => Boolean(codigo));
+
 		if (codigosExcluidos.length === 0) {
 			return NextResponse.json(
 				{ error: 'Nenhuma ocorrência encontrada com os IDs informados.' },
@@ -438,10 +546,16 @@ export async function DELETE(request: Request) {
 			);
 		}
 
+		const limpezaOperacional = await excluirOperacionaisVinculadas(admin, registrosExcluidos);
+
 		return NextResponse.json({
 			sucesso: true,
 			excluidas: codigosExcluidos.length,
+			operacionais_excluidas: limpezaOperacional.excluidas,
 			codigos: codigosExcluidos,
+			...(limpezaOperacional.falhou
+				? { aviso: 'As ocorrências foram excluídas, mas não foi possível limpar todos os registros de Ocorrências Operacionais vinculados.' }
+				: {}),
 		});
 	} catch (error: unknown) {
 		console.error('Erro inesperado ao excluir ocorrências:', error);

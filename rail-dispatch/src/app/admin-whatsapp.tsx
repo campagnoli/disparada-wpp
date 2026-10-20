@@ -327,7 +327,7 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <Send className="w-4 h-4 text-green-600" />
-              Conexão WhatsApp & Grupos do CCO (Evolution API)
+              Conexão WhatsApp e Grupos do CCO (Evolution API)
             </h3>
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
@@ -607,12 +607,12 @@ export default function AdminWhatsApp({ onNotificarErro, onNotificarSucesso }: A
           </div>
         </div>
 
-        {/* Bloco 3: Proteção Anti-Bloqueio & Digitação Humana */}
+        {/* Bloco 3: Proteção Anti-Bloqueio e Digitação Humana */}
         <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
             <ShieldCheck className="w-4 h-4 text-safira" />
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Proteção Anti-Bloqueio & Simulação Humana
+              Proteção Anti-Bloqueio e Simulação Humana
             </h4>
           </div>
 

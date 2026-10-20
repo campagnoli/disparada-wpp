@@ -37,12 +37,16 @@ import {
   Trash2,
 } from 'lucide-react';
 import { isModeloGemini, modelosGemini, type ModeloGemini } from '@/lib/gemini-models';
+import {
+  extrairCampoOperacional,
+  formatarMensagemOcorrencia,
+  type ItemCronologia,
+} from '@/lib/formatadores/ocorrenciaOperacional';
 import { opcoesClassificacao, definicoesTiposIN } from '@/lib/classificacao-ocorrencia';
 import AdminFalhas, { type FalhaPredefinida } from '@/app/admin-falhas';
 import {
   aplicarEncerramentoNaMensagem,
   incluirDetalhesEncerramento,
-  calcularDuracao,
   modeloEncerramentoValido,
   TEMPLATES_MENSAGEM_PADRAO,
   type TemplatesGrupoMensagem,
@@ -56,6 +60,19 @@ import {
 import { SeletorEstacao } from '@/components/seletor-estacao';
 import { ComboboxTrem } from '@/components/combobox-trem';
 import { ImpactoOutraLinhaFields } from '@/components/impacto-outra-linha-fields';
+import PainelHistoricoOcorrenciasOperacionais from '@/components/ocorrencias-operacionais/painel-historico';
+import PainelReporte from '@/components/reporte-turno/painel-reporte';
+import ModalOcorrenciaTradicional from '@/components/historico/modal-ocorrencia-tradicional';
+import type {
+  AbaOcorrenciaTradicional,
+  CanalTradicional,
+  DetalhesEncerramento,
+  GruposRedisparo,
+  MensagensTradicionais,
+  ModalidadePaese,
+  OcorrenciaDetalhe,
+  OcorrenciaHistorico,
+} from '@/lib/ocorrencias/tipos';
 
 export interface ItemLoop {
   id: string;
@@ -65,7 +82,6 @@ export interface ItemLoop {
 }
 
 type EtapaId = 'iniciais' | 'loop' | 'falhas' | 'classificacao' | 'apoio-mrs';
-type ModalidadePaese = 'SPTrans' | 'ARTESP' | 'Trilhos';
 
 interface EtapaConfig {
   id: EtapaId;
@@ -78,8 +94,6 @@ interface Mensagens {
   gerencia: string;
   ocorrencias_operacionais: string;
 }
-
-type MensagensTradicionais = Pick<Mensagens, 'comunicacao' | 'operacao' | 'gerencia'>;
 
 interface FalhaSelecionada {
   chave: string;
@@ -111,46 +125,6 @@ interface Estacao {
   vias?: string[];
   plataformas?: string[];
   itens_infraestrutura?: string[];
-}
-
-interface OcorrenciaHistorico {
-  id: string;
-  codigo_evento: string | null;
-  created_at: string | null;
-  linha: string;
-  via: string;
-  localidade: string;
-  id_trem: string | null;
-  prefixo_viagem: string | null;
-  classificacoes: string[];
-  tipo_in: string | null;
-  paese_acionado: boolean;
-  paese_modalidades: ModalidadePaese[];
-  paese_trecho: string;
-  tem_impacto_outra_linha: boolean;
-  linhas_impactadas_secundarias: string[];
-  descricao_impacto_secundario: string | null;
-  falha: string;
-  hora_inicio: string;
-  hora_fim: string | null;
-  status: string;
-  entregue_com_restricao: boolean;
-  descricao_restricao: string | null;
-  relatar_atuacao: boolean;
-  descricao_atuacao: string | null;
-}
-
-interface OcorrenciaDetalhe extends OcorrenciaHistorico {
-  msg_comunicacao: string;
-  msg_operacao: string;
-  msg_gerencia: string;
-}
-
-interface DetalhesEncerramento {
-  entregueComRestricao: boolean;
-  descricaoRestricao: string;
-  relatarAtuacao: boolean;
-  descricaoAtuacao: string;
 }
 
 interface PaginaHistorico {
@@ -725,6 +699,7 @@ export default function DespachoOcorrencias() {
   const [erroHistorico, setErroHistorico] = useState('');
   const [codigoBusca, setCodigoBusca] = useState('');
   const [ocorrenciaSelecionada, setOcorrenciaSelecionada] = useState<OcorrenciaDetalhe | null>(null);
+  const [abaOcorrenciaTradicional, setAbaOcorrenciaTradicional] = useState<AbaOcorrenciaTradicional>('textos');
   const [buscandoOcorrencia, setBuscandoOcorrencia] = useState(false);
   const [atualizandoHorarioFim, setAtualizandoHorarioFim] = useState(false);
   const [horaFim, setHoraFim] = useState('');
@@ -757,6 +732,7 @@ export default function DespachoOcorrencias() {
   const [nomeExclusao, setNomeExclusao] = useState('');
   const [dataExclusao, setDataExclusao] = useState('');
   const [excluindoOcorrencias, setExcluindoOcorrencias] = useState(false);
+  const [atualizacaoOperacionais, setAtualizacaoOperacionais] = useState(0);
   const [disparandoWpp, setDisparandoWpp] = useState(false);
   const [codigoEventoAtual, setCodigoEventoAtual] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<Mensagens>({
@@ -766,6 +742,13 @@ export default function DespachoOcorrencias() {
     ocorrencias_operacionais: '',
   });
   const [mensagemOcorrenciaOperacional, setMensagemOcorrenciaOperacional] = useState('');
+  const [mensagensGeradas, setMensagensGeradas] = useState(false);
+  const [cronologiaOcorrenciaOperacional, setCronologiaOcorrenciaOperacional] = useState<ItemCronologia[]>([]);
+  const [aasAslOcorrenciaOperacional, setAasAslOcorrenciaOperacional] = useState('');
+  const [cpsOcorrenciaOperacional, setCpsOcorrenciaOperacional] = useState('');
+  const [ocorrenciaOperacionalId, setOcorrenciaOperacionalId] = useState<string | null>(null);
+  const [novaAcaoHorario, setNovaAcaoHorario] = useState('');
+  const [novaAcaoTexto, setNovaAcaoTexto] = useState('');
   const [mensagensGemini, setMensagensGemini] = useState<Mensagens | null>(null);
   const [dadosOcorrenciaGerada, setDadosOcorrenciaGerada] = useState<Record<string, unknown> | null>(null);
   const [gruposSelecionados, setGruposSelecionados] = useState<{
@@ -779,16 +762,10 @@ export default function DespachoOcorrencias() {
     gerencia: true,
     ocorrencias_operacionais: true,
   });
-  const [gruposRedisparo, setGruposRedisparo] = useState<{
-    comunicacao: boolean;
-    operacao: boolean;
-    gerencia: boolean;
-    ocorrencias_operacionais: boolean;
-  }>({
+  const [gruposRedisparo, setGruposRedisparo] = useState<GruposRedisparo>({
     comunicacao: true,
     operacao: true,
     gerencia: true,
-    ocorrencias_operacionais: true,
   });
   const [disparandoCanal, setDisparandoCanal] = useState<string | null>(null);
 
@@ -1351,10 +1328,15 @@ export default function DespachoOcorrencias() {
       const data: Mensagens = await res.json();
       setMensagens(data);
       setMensagemOcorrenciaOperacional(data.ocorrencias_operacionais);
+      setAasAslOcorrenciaOperacional(extrairCampoOperacional(data.ocorrencias_operacionais, 'AAS/ASL'));
+      setCpsOcorrenciaOperacional(extrairCampoOperacional(data.ocorrencias_operacionais, 'CPS'));
+      setCronologiaOcorrenciaOperacional([]);
+      setOcorrenciaOperacionalId(null);
       setMensagensGemini(data);
       setDadosOcorrenciaGerada(dadosOcorrencia);
       setCodigoEventoAtual(null);
       setDisparoRealizado(false);
+      setMensagensGeradas(true);
     } catch (err: unknown) {
       exibirErro(err, 'Geração de Mensagens com IA');
     } finally {
@@ -1395,7 +1377,8 @@ export default function DespachoOcorrencias() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           codigo_evento: codigo,
-          hora_fim: horaFim || undefined,
+          // O encerramento é tratado exclusivamente por handleAtualizarHorarioFim.
+          // Enviar hora_fim aqui fecharia a ocorrência ao apenas redisparar/sincronizar mensagens.
           msg_comunicacao: mensagensAlvo.comunicacao,
           msg_operacao: mensagensAlvo.operacao,
           msg_gerencia: mensagensAlvo.gerencia,
@@ -1533,6 +1516,7 @@ export default function DespachoOcorrencias() {
     setMensagensGemini(null);
     setDadosOcorrenciaGerada(null);
     setOcorrenciaSelecionada(ocorrencia);
+    setAbaOcorrenciaTradicional(ocorrencia.status === 'encerrada' ? 'textos' : 'encerramento');
     const horaAtual = new Date().toTimeString().slice(0, 5);
     const horaFinal = ocorrencia.hora_fim || horaAtual;
     const detalhes: DetalhesEncerramento = {
@@ -1550,9 +1534,6 @@ export default function DespachoOcorrencias() {
     setSucessoEncerramento('');
     setDisparoRealizado(false);
     setErroBusca('');
-    setTimeout(() => {
-      document.getElementById('painel-encerramento')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
   };
 
   const handleMudarHoraFim = (novaHora: string) => {
@@ -1565,6 +1546,58 @@ export default function DespachoOcorrencias() {
         descricaoAtuacao,
       }));
     }
+  };
+
+  const alternarRestricaoEncerramento = (marcado: boolean) => {
+    const detalhes: DetalhesEncerramento = {
+      entregueComRestricao: marcado,
+      descricaoRestricao: marcado ? descricaoRestricao : '',
+      relatarAtuacao,
+      descricaoAtuacao,
+    };
+    setEntregueComRestricao(marcado);
+    if (!marcado) setDescricaoRestricao('');
+    atualizarPreviaEncerramento(detalhes);
+  };
+
+  const mudarDescricaoRestricaoEncerramento = (descricao: string) => {
+    setDescricaoRestricao(descricao);
+    atualizarPreviaEncerramento({
+      entregueComRestricao,
+      descricaoRestricao: descricao,
+      relatarAtuacao,
+      descricaoAtuacao,
+    });
+  };
+
+  const alternarAtuacaoEncerramento = (marcado: boolean) => {
+    const detalhes: DetalhesEncerramento = {
+      entregueComRestricao,
+      descricaoRestricao,
+      relatarAtuacao: marcado,
+      descricaoAtuacao: marcado ? descricaoAtuacao : '',
+    };
+    setRelatarAtuacao(marcado);
+    if (!marcado) setDescricaoAtuacao('');
+    atualizarPreviaEncerramento(detalhes);
+  };
+
+  const mudarDescricaoAtuacaoEncerramento = (descricao: string) => {
+    setDescricaoAtuacao(descricao);
+    atualizarPreviaEncerramento({
+      entregueComRestricao,
+      descricaoRestricao,
+      relatarAtuacao,
+      descricaoAtuacao: descricao,
+    });
+  };
+
+  const mudarMensagemHistorico = (canal: CanalTradicional, valor: string) => {
+    setMsgFimEditada((prev) => ({ ...prev, [canal]: valor }));
+  };
+
+  const mudarGrupoRedisparo = (canal: CanalTradicional, marcado: boolean) => {
+    setGruposRedisparo((prev) => ({ ...prev, [canal]: marcado }));
   };
 
   const handlePesquisarOcorrencia = async (e: React.FormEvent) => {
@@ -1651,6 +1684,7 @@ export default function DespachoOcorrencias() {
       });
       return;
     }
+    const jaEstavaEncerrada = ocorrenciaSelecionada.status === 'encerrada';
     setAtualizandoHorarioFim(true);
     setErroBusca('');
     setSucessoEncerramento('');
@@ -1695,15 +1729,13 @@ export default function DespachoOcorrencias() {
         operacao: data.ocorrencia.msg_operacao,
         gerencia: data.ocorrencia.msg_gerencia,
       });
-      setSucessoEncerramento(`Ocorrência ${data.ocorrencia.codigo_evento} encerrada com sucesso às ${horaFim}! Mensagens atualizadas com o horário de fim.`);
+      setSucessoEncerramento(
+        jaEstavaEncerrada
+          ? `Encerramento da ocorrência ${data.ocorrencia.codigo_evento} atualizado para ${horaFim}! Mensagens regeradas com o novo horário de fim.`
+          : `Ocorrência ${data.ocorrencia.codigo_evento} encerrada com sucesso às ${horaFim}! Mensagens atualizadas com o horário de fim.`
+      );
+      setAbaOcorrenciaTradicional('textos');
       await carregarHistorico(paginaHistorico);
-      exibirModal({
-        tipo: 'sucesso',
-        titulo: 'Ocorrência Encerrada com Sucesso!',
-        mensagem: `O evento **${data.ocorrencia.codigo_evento}** foi finalizado com o horário de fim **${horaFim}**. As mensagens dos 3 canais foram atualizadas e estão prontas para redisparo.`,
-        dica: 'Você pode redisparar as mensagens nos canais do CCO ou copiar individualmente os textos gerados.',
-        textoBotaoConfirmar: 'OK',
-      });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Falha ao atualizar ocorrência.';
       setErroBusca(msg);
@@ -1837,6 +1869,19 @@ export default function DespachoOcorrencias() {
         dataDisparo = data;
       }
 
+      // Salvamento automático no histórico (Supabase) antes do disparo operacional,
+      // para que a ocorrência operacional já seja criada vinculada ao ID do evento.
+      const textosParaSalvar = mensagensCompletasParaSalvar ?? (abaAtiva === 'historico' ? msgFimEditada : mensagens);
+      let codigoEventoSalvo: string | null = null;
+      let erroAoSalvar: string | null = null;
+
+      try {
+        codigoEventoSalvo = await salvarOcorrenciaInterna(textosParaSalvar);
+      } catch (errSalvar: unknown) {
+        erroAoSalvar = errSalvar instanceof Error ? errSalvar.message : 'Falha ao salvar ocorrência.';
+        console.error('Falha no salvamento automático antes do disparo WhatsApp:', errSalvar);
+      }
+
       // Disparo separado para o grupo Ocorrências Operacionais (rota própria com groupId configurável)
       if (gruposParaEnviar.includes('ocorrencias_operacionais') && mensagemOcorrenciaOperacional.trim()) {
         try {
@@ -1849,14 +1894,16 @@ export default function DespachoOcorrencias() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              id: ocorrenciaOperacionalId || undefined,
+              codigoEvento: codigoEventoSalvo || ocorrenciaSelecionada?.codigo_evento || codigoEventoAtual || null,
               linha,
               tipoOcorrencia: tipoOc,
               local: localOc,
               horario: horaInicio,
               descritivo: falha,
-              cronologia: [],
-              aasAsl: '',
-              cps: '',
+              cronologia: cronologiaOcorrenciaOperacional,
+              aasAsl: aasAslOcorrenciaOperacional,
+              cps: cpsOcorrenciaOperacional,
               status: 'em_andamento',
               groupIdWhatsApp: '',
               dispararWhatsApp: true,
@@ -1869,6 +1916,7 @@ export default function DespachoOcorrencias() {
           } else {
             disparoOcorrenciaOperacional = { sucesso: true, mensagem: `Ocorrência operacional registrada (ID: ${dataOc?.id || '—'})` };
             setMensagemOcorrenciaOperacional(dataOc.mensagemFormatada || mensagemOcorrenciaOperacional);
+            if (dataOc?.id) setOcorrenciaOperacionalId(dataOc.id);
           }
         } catch (errOc: unknown) {
           disparoOcorrenciaOperacional = {
@@ -1876,18 +1924,6 @@ export default function DespachoOcorrencias() {
             mensagem: errOc instanceof Error ? errOc.message : 'Falha ao disparar Ocorrências Operacionais.',
           };
         }
-      }
-
-      // Salvamento automático no histórico (Supabase) após o disparo com sucesso
-      const textosParaSalvar = mensagensCompletasParaSalvar ?? (abaAtiva === 'historico' ? msgFimEditada : mensagens);
-      let codigoEventoSalvo: string | null = null;
-      let erroAoSalvar: string | null = null;
-
-      try {
-        codigoEventoSalvo = await salvarOcorrenciaInterna(textosParaSalvar);
-      } catch (errSalvar: unknown) {
-        erroAoSalvar = errSalvar instanceof Error ? errSalvar.message : 'Falha ao salvar ocorrência.';
-        console.error('Falha no salvamento automático após disparo WhatsApp:', errSalvar);
       }
 
       setDisparoRealizado(true);
@@ -1963,11 +1999,8 @@ export default function DespachoOcorrencias() {
 
   const handleRedispararWhatsApp = async () => {
     if (!ocorrenciaSelecionada) return;
-    const gruposAlvo = (
-      Object.entries(gruposRedisparo)
-        .filter(([, sel]) => sel)
-        .map(([g]) => g as 'comunicacao' | 'operacao' | 'gerencia')
-    );
+    const gruposAlvo = (['comunicacao', 'operacao', 'gerencia'] as const)
+      .filter((grupo) => gruposRedisparo[grupo]);
     await handleDispararWhatsApp(msgFimEditada, gruposAlvo, msgFimEditada);
   };
 
@@ -2010,14 +2043,16 @@ export default function DespachoOcorrencias() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: ocorrenciaOperacionalId || undefined,
+          codigoEvento: codigoEventoAtual || ocorrenciaSelecionada?.codigo_evento || null,
           linha: linha,
           tipoOcorrencia: tipoOc,
           local: localOc,
           horario: horaInicio,
           descritivo: falha,
-          cronologia: [],
-          aasAsl: '',
-          cps: '',
+          cronologia: cronologiaOcorrenciaOperacional,
+          aasAsl: aasAslOcorrenciaOperacional,
+          cps: cpsOcorrenciaOperacional,
           status: 'em_andamento',
           groupIdWhatsApp: '',
           dispararWhatsApp: true,
@@ -2038,6 +2073,7 @@ export default function DespachoOcorrencias() {
       }
 
       setMensagemOcorrenciaOperacional(data.mensagemFormatada || mensagemOcorrenciaOperacional);
+      if (data.id) setOcorrenciaOperacionalId(data.id);
       setDisparoRealizado(true);
 
       exibirModal({
@@ -2062,6 +2098,70 @@ export default function DespachoOcorrencias() {
       setDisparandoWpp(false);
       setDisparandoCanal(null);
     }
+  };
+
+  const montarMensagemOperacional = (
+    cronologia: ItemCronologia[],
+    aasAsl: string,
+    cps: string,
+  ) => {
+    const localOc = tipoLocalidade === 'trecho' && localidadeFim
+      ? `${localidadeInicio} - ${localidadeFim}`
+      : localidadeInicio;
+
+    return formatarMensagemOcorrencia({
+      linha,
+      tipoOcorrencia: 'Ocorrência Operacional',
+      local: localOc,
+      horario: horaInicio,
+      descritivo: falha,
+      cronologia,
+      aasAsl,
+      cps,
+    });
+  };
+
+  const handleMudarAasAslOperacional = (valor: string) => {
+    setAasAslOcorrenciaOperacional(valor);
+    setMensagemOcorrenciaOperacional(
+      montarMensagemOperacional(cronologiaOcorrenciaOperacional, valor, cpsOcorrenciaOperacional),
+    );
+  };
+
+  const handleMudarCpsOperacional = (valor: string) => {
+    setCpsOcorrenciaOperacional(valor);
+    setMensagemOcorrenciaOperacional(
+      montarMensagemOperacional(cronologiaOcorrenciaOperacional, aasAslOcorrenciaOperacional, valor),
+    );
+  };
+
+  const handleAdicionarAcaoCronologia = () => {
+    if (!novaAcaoHorario.trim() || !novaAcaoTexto.trim()) {
+      exibirModal({
+        tipo: 'aviso',
+        titulo: 'Ação Incompleta',
+        mensagem: 'Informe o horário e o texto da ação para adicionar à cronologia.',
+        textoBotaoConfirmar: 'Entendido',
+      });
+      return;
+    }
+    const novoItem: ItemCronologia = { horario: novaAcaoHorario.trim(), texto: novaAcaoTexto.trim() };
+    const novaCronologia = [...cronologiaOcorrenciaOperacional, novoItem];
+    setCronologiaOcorrenciaOperacional(novaCronologia);
+    setNovaAcaoHorario('');
+    setNovaAcaoTexto('');
+    setMensagemOcorrenciaOperacional(
+      montarMensagemOperacional(novaCronologia, aasAslOcorrenciaOperacional, cpsOcorrenciaOperacional),
+    );
+  };
+
+  const handleRemoverUltimaAcaoCronologia = () => {
+    if (cronologiaOcorrenciaOperacional.length === 0) return;
+    const novaCronologia = cronologiaOcorrenciaOperacional.slice(0, -1);
+    setCronologiaOcorrenciaOperacional(novaCronologia);
+    setMensagemOcorrenciaOperacional(
+      montarMensagemOperacional(novaCronologia, aasAslOcorrenciaOperacional, cpsOcorrenciaOperacional),
+    );
   };
 
   /**
@@ -2187,7 +2287,9 @@ export default function DespachoOcorrencias() {
       const data = (await res.json().catch(() => null)) as {
         sucesso?: boolean;
         excluidas?: number;
+        operacionais_excluidas?: number;
         codigos?: string[];
+        aviso?: string;
         error?: string;
       } | null;
 
@@ -2201,6 +2303,14 @@ export default function DespachoOcorrencias() {
       setDataExclusao('');
 
       await carregarHistorico(paginaHistorico);
+      setAtualizacaoOperacionais((atual) => atual + 1);
+
+      const totalOperacionais = data.operacionais_excluidas ?? 0;
+      const complementoOperacional = totalOperacionais > 0
+        ? ` Também foram removidos ${totalOperacionais} registro${
+          totalOperacionais !== 1 ? 's' : ''
+        } de Ocorrências Operacionais.`
+        : '';
 
       exibirModal({
         tipo: 'sucesso',
@@ -2209,7 +2319,8 @@ export default function DespachoOcorrencias() {
           data.excluidas !== 1 ? 's' : ''
         } excluída${
           data.excluidas !== 1 ? 's' : ''
-        } com sucesso por **${nomeExclusao.trim()}** em ${dataExclusao.trim()}.`,
+        } com sucesso por **${nomeExclusao.trim()}** em ${dataExclusao.trim()}.${complementoOperacional}`,
+        ...(data.aviso ? { dica: data.aviso } : {}),
         textoBotaoConfirmar: 'OK',
       });
     } catch (error: unknown) {
@@ -2298,6 +2409,9 @@ export default function DespachoOcorrencias() {
     });
   };
 
+  const etapaFinal = indiceEtapaAtiva === totalEtapas - 1;
+  const mostrarPreviaMensagens = etapaFinal && mensagensGeradas;
+
   return (
     <main className="min-h-screen bg-white text-slate-900 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -2360,7 +2474,7 @@ export default function DespachoOcorrencias() {
             onClick={() => setAbaAtiva('reporte')}
             className={`inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium ${abaAtiva === 'reporte' ? 'border-safira text-safira' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
           >
-            Reporte
+            Reporte de Turno
           </button>
           <button
             id="aba-historico"
@@ -2401,7 +2515,7 @@ export default function DespachoOcorrencias() {
         >
 
           {/* Formulário de Registro */}
-          <div className="lg:col-span-5 p-3">
+          <div className={`${mostrarPreviaMensagens ? 'lg:col-span-5' : 'lg:col-span-12'} p-3`}>
             <div className="border border-slate-300 bg-white p-3">
               <h2 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
                 <AlertTriangle className="w-3.5 h-3.5 text-coral" />
@@ -3849,6 +3963,12 @@ export default function DespachoOcorrencias() {
                       setEtapaAtiva('iniciais');
                       setHoraInicio('');
                       setMensagens({ comunicacao: '', operacao: '', gerencia: '', ocorrencias_operacionais: '' });
+                      setMensagemOcorrenciaOperacional('');
+                      setMensagensGeradas(false);
+                      setCronologiaOcorrenciaOperacional([]);
+                      setAasAslOcorrenciaOperacional('');
+                      setCpsOcorrenciaOperacional('');
+                      setOcorrenciaOperacionalId(null);
                       setCodigoEventoAtual(null);
                       setDisparoRealizado(false);
                       setErroBusca('');
@@ -3880,6 +4000,7 @@ export default function DespachoOcorrencias() {
         </div>
 
           {/* Cards de Pré-visualização das Mensagens */}
+          {mostrarPreviaMensagens && (
           <div className="lg:col-span-7 space-y-4">
 
             {/* Banner de Ocorrência Salva / Código de Evento */}
@@ -4120,6 +4241,34 @@ export default function DespachoOcorrencias() {
                   </button>
                 </div>
               </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="aas-asl-operacional" className="form-label text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                    AAS/ASL
+                  </label>
+                  <input
+                    id="aas-asl-operacional"
+                    type="text"
+                    value={aasAslOcorrenciaOperacional}
+                    onChange={(e) => handleMudarAasAslOperacional(e.target.value)}
+                    placeholder="Ex.: ASL 123"
+                    className="w-full form-control text-xs"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cps-operacional" className="form-label text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                    CPS
+                  </label>
+                  <input
+                    id="cps-operacional"
+                    type="text"
+                    value={cpsOcorrenciaOperacional}
+                    onChange={(e) => handleMudarCpsOperacional(e.target.value)}
+                    placeholder="Ex.: CPS 456"
+                    className="w-full form-control text-xs"
+                  />
+                </div>
+              </div>
               <textarea
                 rows={4}
                 value={mensagemOcorrenciaOperacional}
@@ -4127,6 +4276,25 @@ export default function DespachoOcorrencias() {
                 placeholder="Aguardando geração do modelo de ocorrência operacional..."
                 className="w-full form-control font-sans font-mono text-[11px]"
               />
+              <div className="flex flex-col gap-2 pt-2 border-t border-amber-200">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Nova acao na cronologia (envia uma nova mensagem)</span>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input type="text" value={novaAcaoHorario} onChange={(e) => setNovaAcaoHorario(e.target.value)} placeholder="HH:MM" className="form-control text-xs sm:w-20" />
+                  <input type="text" value={novaAcaoTexto} onChange={(e) => setNovaAcaoTexto(e.target.value)} placeholder="Descricao da acao" className="form-control text-xs flex-1" />
+                  <button type="button" onClick={() => void handleAdicionarAcaoCronologia()} disabled={!novaAcaoHorario.trim() || !novaAcaoTexto.trim()} className="btn btn-secondary btn-sm text-xs">
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar
+                  </button>
+                  <button type="button" onClick={() => void handleRemoverUltimaAcaoCronologia()} disabled={cronologiaOcorrenciaOperacional.length === 0} className="btn btn-secondary btn-sm text-xs text-rose-600" title="Remover ultima acao">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {cronologiaOcorrenciaOperacional.length > 0 && (
+                  <p className="text-[10px] text-slate-500">
+                    {cronologiaOcorrenciaOperacional.length} acao(oes) na cronologia. Clique em &quot;Disparar grupo&quot; para enviar uma nova mensagem.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
@@ -4186,6 +4354,7 @@ export default function DespachoOcorrencias() {
             </div>
 
           </div>
+          )}
 
         </div>
 
@@ -4267,416 +4436,45 @@ export default function DespachoOcorrencias() {
 
           {erroBusca && <p className="mb-4 text-sm text-rose-700" role="alert">{erroBusca}</p>}
 
+          <PainelHistoricoOcorrenciasOperacionais
+            templateEncerramento={templatesEncerramento.ocorrencias_operacionais}
+            atualizacao={atualizacaoOperacionais}
+          />
+
           {ocorrenciaSelecionada && (
-            <section id="painel-encerramento" className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-xs space-y-4" aria-label="Atualizar horário fim e redisparar evento">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-mono text-base font-bold text-safira">
-                      Evento {ocorrenciaSelecionada.codigo_evento}
-                    </h3>
-                    <span className={`badge ${ocorrenciaSelecionada.status === 'encerrada' ? 'badge-jade' : 'badge-coral'}`}>
-                      {ocorrenciaSelecionada.status === 'encerrada' ? 'Encerrada' : 'Em andamento'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {ocorrenciaSelecionada.linha} ({ocorrenciaSelecionada.via}) · {ocorrenciaSelecionada.localidade}
-                    {ocorrenciaSelecionada.id_trem ? ` · Trem ${ocorrenciaSelecionada.id_trem}` : ''}
-                    {ocorrenciaSelecionada.prefixo_viagem ? ` · Prefixo ${ocorrenciaSelecionada.prefixo_viagem}` : ''}
-                  </p>
-                  {ocorrenciaSelecionada.paese_acionado && (
-                    <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-                      <strong>PAESE:</strong> {ocorrenciaSelecionada.paese_modalidades.map((modalidade) => `PAESE ${modalidade}`).join(' + ')}
-                      {ocorrenciaSelecionada.paese_trecho ? ` · Trecho: ${ocorrenciaSelecionada.paese_trecho}` : ''}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 font-mono">
-                    <span>Início: <strong>{ocorrenciaSelecionada.hora_inicio}</strong></span>
-                    <span>·</span>
-                    <span>Fim: <strong>{ocorrenciaSelecionada.hora_fim || 'Não encerrada'}</strong></span>
-                    {ocorrenciaSelecionada.hora_fim && (
-                      <>
-                        <span>·</span>
-                        <span>Duração: <strong className="text-safira">{calcularDuracao(ocorrenciaSelecionada.hora_inicio, ocorrenciaSelecionada.hora_fim)}</strong></span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setOcorrenciaSelecionada(null)}
-                  className="btn btn-secondary btn-sm flex items-center gap-1 text-xs"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Fechar detalhes
-                </button>
-              </div>
-
-              {sucessoEncerramento && (
-                <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-2.5 text-xs font-medium text-emerald-900" role="status">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>{sucessoEncerramento}</span>
-                </div>
-              )}
-
-              {/* Formulário de Encerramento com Horário de Fim */}
-              <div className="rounded-md border border-slate-300 bg-white p-3 shadow-sm space-y-2">
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label htmlFor="hora-fim" className="form-label mb-0 text-xs font-semibold">
-                        Horário de Encerramento (Fim da Ocorrência)
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handleMudarHoraFim(new Date().toTimeString().slice(0, 5))}
-                        className="text-[11px] text-safira hover:underline font-medium"
-                      >
-                        Usar hora atual ({new Date().toTimeString().slice(0, 5)})
-                      </button>
-                    </div>
-                    <input
-                      id="hora-fim"
-                      type="time"
-                      required
-                      value={horaFim}
-                      onChange={(e) => handleMudarHoraFim(e.target.value)}
-                      className="w-full form-control font-mono"
-                    />
-                    {horaFim && /^([01]\d|2[0-3]):[0-5]\d$/.test(horaFim) && ocorrenciaSelecionada?.hora_inicio && (
-                      <p className="text-[11.5px] text-safira mt-1 font-mono font-medium">
-                        ⏱️ Duração calculada: <strong>{calcularDuracao(ocorrenciaSelecionada.hora_inicio, horaFim)}</strong>
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 p-3">
-                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={entregueComRestricao}
-                        onChange={(event) => {
-                          const marcado = event.target.checked;
-                          const detalhes = {
-                            entregueComRestricao: marcado,
-                            descricaoRestricao: marcado ? descricaoRestricao : '',
-                            relatarAtuacao,
-                            descricaoAtuacao,
-                          };
-                          setEntregueComRestricao(marcado);
-                          if (!marcado) setDescricaoRestricao('');
-                          atualizarPreviaEncerramento(detalhes);
-                        }}
-                        className="rounded border-slate-300 text-safira focus:ring-safira"
-                      />
-                      Entregue com restrição?
-                    </label>
-                    {entregueComRestricao && (
-                      <div className="mt-2">
-                        <label htmlFor="descricao-restricao" className="form-label text-xs">
-                          Descrição da restrição
-                        </label>
-                        <textarea
-                          id="descricao-restricao"
-                          required
-                          maxLength={5000}
-                          value={descricaoRestricao}
-                          onChange={(event) => {
-                            const descricao = event.target.value;
-                            setDescricaoRestricao(descricao);
-                            atualizarPreviaEncerramento({
-                              entregueComRestricao,
-                              descricaoRestricao: descricao,
-                              relatarAtuacao,
-                              descricaoAtuacao,
-                            });
-                          }}
-                          rows={3}
-                          className="w-full form-control text-sm"
-                          placeholder="Descreva as restrições mantidas após a ocorrência"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div className="rounded-md border border-slate-200 p-3">
-                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={relatarAtuacao}
-                        onChange={(event) => {
-                          const marcado = event.target.checked;
-                          const detalhes = {
-                            entregueComRestricao,
-                            descricaoRestricao,
-                            relatarAtuacao: marcado,
-                            descricaoAtuacao: marcado ? descricaoAtuacao : '',
-                          };
-                          setRelatarAtuacao(marcado);
-                          if (!marcado) setDescricaoAtuacao('');
-                          atualizarPreviaEncerramento(detalhes);
-                        }}
-                        className="rounded border-slate-300 text-safira focus:ring-safira"
-                      />
-                      Deseja relatar a atuação?
-                    </label>
-                    {relatarAtuacao && (
-                      <div className="mt-2">
-                        <label htmlFor="descricao-atuacao" className="form-label text-xs">
-                          Descrição da atuação
-                        </label>
-                        <textarea
-                          id="descricao-atuacao"
-                          required
-                          maxLength={5000}
-                          value={descricaoAtuacao}
-                          onChange={(event) => {
-                            const descricao = event.target.value;
-                            setDescricaoAtuacao(descricao);
-                            atualizarPreviaEncerramento({
-                              entregueComRestricao,
-                              descricaoRestricao,
-                              relatarAtuacao,
-                              descricaoAtuacao: descricao,
-                            });
-                          }}
-                          rows={3}
-                          className="w-full form-control text-sm"
-                          placeholder="Descreva a atuação realizada"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void handleAtualizarHorarioFim()}
-                    disabled={
-                      !horaFim
-                      || atualizandoHorarioFim
-                      || !carregouTemplatesEncerramento
-                      || Boolean(erroTemplatesEncerramento)
-                      || (entregueComRestricao && !descricaoRestricao.trim())
-                      || (relatarAtuacao && !descricaoAtuacao.trim())
-                    }
-                    className="btn btn-safira disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    {atualizandoHorarioFim ? 'Encerrando...' : 'Encerrar Ocorrência e Gerar Mensagens'}
-                  </button>
-                </div>
-                {erroTemplatesEncerramento && (
-                  <p className="text-xs text-rose-700" role="alert">
-                    Não foi possível carregar os modelos de encerramento: {erroTemplatesEncerramento}
-                  </p>
-                )}
-                <p className="text-[11.5px] text-slate-500">
-                  As restrições informadas e a atuação descrita serão incluídas nas mensagens finais.
-                </p>
-              </div>
-
-              {/* Mensagens Prontas para Disparo */}
-              <div className="space-y-3 pt-1">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
-                  <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                    Mensagens com Horário de Fim
-                  </span>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-[11px] text-slate-500 font-medium">Redisparar em:</span>
-                    <label className="inline-flex items-center gap-1 cursor-pointer text-xs font-semibold text-safira hover:opacity-80">
-                      <input
-                        type="checkbox"
-                        checked={gruposRedisparo.comunicacao}
-                        onChange={(e) => setGruposRedisparo((prev) => ({ ...prev, comunicacao: e.target.checked }))}
-                        className="rounded border-slate-300 text-safira focus:ring-safira"
-                      />
-                      <span>Comunicação</span>
-                    </label>
-                    <label className="inline-flex items-center gap-1 cursor-pointer text-xs font-semibold text-coral hover:opacity-80">
-                      <input
-                        type="checkbox"
-                        checked={gruposRedisparo.operacao}
-                        onChange={(e) => setGruposRedisparo((prev) => ({ ...prev, operacao: e.target.checked }))}
-                        className="rounded border-slate-300 text-coral focus:ring-coral"
-                      />
-                      <span>Operação CCO / Executivo</span>
-                    </label>
-                    <label className="inline-flex items-center gap-1 cursor-pointer text-xs font-semibold text-jade hover:opacity-80">
-                      <input
-                        type="checkbox"
-                        checked={gruposRedisparo.gerencia}
-                        onChange={(e) => setGruposRedisparo((prev) => ({ ...prev, gerencia: e.target.checked }))}
-                        className="rounded border-slate-300 text-jade focus:ring-jade"
-                      />
-                      <span>Gerência / Órgão Regulador</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Mensagem 1: Comunicação */}
-                <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-semibold text-safira">Grupo: Comunicação / Imprensa</span>
-                      <p className="text-[11px] text-slate-400">Contexto claro para imprensa e passageiros</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void handleDispararCanalIndividual('comunicacao', msgFimEditada.comunicacao)}
-                        disabled={!msgFimEditada.comunicacao || disparandoWpp}
-                        className="btn btn-secondary btn-sm flex items-center gap-1 text-xs text-safira hover:bg-safira/10 disabled:opacity-30"
-                        title="Disparar apenas neste grupo"
-                      >
-                        <Send className={`w-3.5 h-3.5 ${disparandoCanal === 'comunicacao' ? 'animate-pulse' : ''}`} />
-                        <span className="hidden sm:inline">Disparar grupo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copiarTexto('hist-comunicacao', msgFimEditada.comunicacao)}
-                        className="btn btn-secondary btn-sm"
-                        title="Copiar texto"
-                      >
-                        {copiado === 'hist-comunicacao' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    rows={3}
-                    value={msgFimEditada.comunicacao}
-                    onChange={(e) => setMsgFimEditada((prev) => ({ ...prev, comunicacao: e.target.value }))}
-                    className="w-full form-control font-sans text-xs"
-                  />
-                </div>
-
-                {/* Mensagem 2: Operação */}
-                <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-semibold text-coral">Grupo: Operação CCO / Executivo</span>
-                      <p className="text-[11px] text-slate-400">Técnico e sucinto para tráfego e estações</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void handleDispararCanalIndividual('operacao', msgFimEditada.operacao)}
-                        disabled={!msgFimEditada.operacao || disparandoWpp}
-                        className="btn btn-secondary btn-sm flex items-center gap-1 text-xs text-coral hover:bg-coral/10 disabled:opacity-30"
-                        title="Disparar apenas neste grupo"
-                      >
-                        <Send className={`w-3.5 h-3.5 ${disparandoCanal === 'operacao' ? 'animate-pulse' : ''}`} />
-                        <span className="hidden sm:inline">Disparar grupo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copiarTexto('hist-operacao', msgFimEditada.operacao)}
-                        className="btn btn-secondary btn-sm"
-                        title="Copiar texto"
-                      >
-                        {copiado === 'hist-operacao' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    rows={3}
-                    value={msgFimEditada.operacao}
-                    onChange={(e) => setMsgFimEditada((prev) => ({ ...prev, operacao: e.target.value }))}
-                    className="w-full form-control font-mono text-xs"
-                  />
-                </div>
-
-                {/* Mensagem 3: Gerência */}
-                <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-semibold text-jade">Grupo: Gerência / Órgão Regulador</span>
-                      <p className="text-[11px] text-slate-400">Resumo executivo de fechamento</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void handleDispararCanalIndividual('gerencia', msgFimEditada.gerencia)}
-                        disabled={!msgFimEditada.gerencia || disparandoWpp}
-                        className="btn btn-secondary btn-sm flex items-center gap-1 text-xs text-jade hover:bg-jade/10 disabled:opacity-30"
-                        title="Disparar apenas neste grupo"
-                      >
-                        <Send className={`w-3.5 h-3.5 ${disparandoCanal === 'gerencia' ? 'animate-pulse' : ''}`} />
-                        <span className="hidden sm:inline">Disparar grupo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copiarTexto('hist-gerencia', msgFimEditada.gerencia)}
-                        className="btn btn-secondary btn-sm"
-                        title="Copiar texto"
-                      >
-                        {copiado === 'hist-gerencia' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    rows={4}
-                    value={msgFimEditada.gerencia}
-                    onChange={(e) => setMsgFimEditada((prev) => ({ ...prev, gerencia: e.target.value }))}
-                    className="w-full form-control font-sans text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Botão de Disparo Novamente */}
-              <div className="border-t border-slate-200 pt-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="text-xs text-slate-500">
-                  {disparoRealizado ? (
-                    <span className="text-emerald-700 font-medium flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Disparo de encerramento registrado!
-                    </span>
-                  ) : (
-                    <span>Pronto para enviar o informe final de encerramento da ocorrência.</span>
-                  )}
-                </div>
-
-                {(() => {
-                  const qtdSelecionada = Object.values(gruposRedisparo).filter(Boolean).length;
-                  const podeRedisparar =
-                    qtdSelecionada > 0 &&
-                    (!gruposRedisparo.comunicacao || Boolean(msgFimEditada.comunicacao)) &&
-                    (!gruposRedisparo.operacao || Boolean(msgFimEditada.operacao)) &&
-                    (!gruposRedisparo.gerencia || Boolean(msgFimEditada.gerencia)) &&
-                    !disparandoWpp;
-
-                  const textoBotao =
-                    disparandoWpp
-                      ? 'Disparando no WhatsApp...'
-                      : qtdSelecionada === 0
-                      ? 'Selecione ao menos 1 grupo'
-                      : qtdSelecionada === 3
-                      ? 'Disparar Novamente nos 3 Grupos'
-                      : qtdSelecionada === 1
-                      ? `Disparar Novamente no Grupo ${
-                          gruposRedisparo.comunicacao
-                            ? 'Comunicação'
-                            : gruposRedisparo.operacao
-                            ? 'Operação'
-                            : 'Gerência'
-                        }`
-                      : 'Disparar Novamente nos 2 Grupos Selecionados';
-
-                  return (
-                    <button
-                      type="button"
-                      disabled={!podeRedisparar}
-                      onClick={() => void handleRedispararWhatsApp()}
-                      className="w-full sm:w-auto btn btn-jade font-semibold flex items-center justify-center gap-2 px-5 py-2.5 shadow-xs disabled:opacity-50"
-                    >
-                      <Send className="w-4 h-4" />
-                      {textoBotao}
-                    </button>
-                  );
-                })()}
-              </div>
-            </section>
+            <ModalOcorrenciaTradicional
+              key={`${ocorrenciaSelecionada.id}-${ocorrenciaSelecionada.status}`}
+              ocorrencia={ocorrenciaSelecionada}
+              onFechar={() => setOcorrenciaSelecionada(null)}
+              abaAtiva={abaOcorrenciaTradicional}
+              onMudarAba={setAbaOcorrenciaTradicional}
+              horaFim={horaFim}
+              onMudarHoraFim={handleMudarHoraFim}
+              entregueComRestricao={entregueComRestricao}
+              descricaoRestricao={descricaoRestricao}
+              relatarAtuacao={relatarAtuacao}
+              descricaoAtuacao={descricaoAtuacao}
+              onAlternarRestricao={alternarRestricaoEncerramento}
+              onMudarDescricaoRestricao={mudarDescricaoRestricaoEncerramento}
+              onAlternarAtuacao={alternarAtuacaoEncerramento}
+              onMudarDescricaoAtuacao={mudarDescricaoAtuacaoEncerramento}
+              atualizandoEncerramento={atualizandoHorarioFim}
+              carregouTemplatesEncerramento={carregouTemplatesEncerramento}
+              erroTemplatesEncerramento={erroTemplatesEncerramento}
+              sucessoEncerramento={sucessoEncerramento}
+              onEncerrar={() => void handleAtualizarHorarioFim()}
+              mensagens={msgFimEditada}
+              onMudarMensagem={mudarMensagemHistorico}
+              gruposRedisparo={gruposRedisparo}
+              onMudarGrupo={mudarGrupoRedisparo}
+              disparandoWpp={disparandoWpp}
+              disparandoCanal={disparandoCanal}
+              onDispararCanal={handleDispararCanalIndividual}
+              onRedisparar={() => void handleRedispararWhatsApp()}
+              disparoRealizado={disparoRealizado}
+              copiado={copiado}
+              onCopiar={copiarTexto}
+            />
           )}
 
           <div className="overflow-x-auto">
@@ -4823,9 +4621,18 @@ export default function DespachoOcorrencias() {
           role="tabpanel"
           aria-labelledby="aba-reporte"
           hidden={abaAtiva !== 'reporte'}
-          className="py-10 text-center text-base font-semibold text-slate-600"
         >
-          Em implementação
+          <PainelReporte
+            onNotificarErro={exibirErro}
+            onNotificarSucesso={(titulo, mensagem) => {
+              exibirModal({
+                tipo: 'sucesso',
+                titulo,
+                mensagem,
+                textoBotaoConfirmar: 'OK',
+              });
+            }}
+          />
         </div>
 
         <div

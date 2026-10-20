@@ -292,13 +292,12 @@ export function montarSystemInstruction(templatePrompt: string, contexto: Contex
   *DESCRITIVO:* [Texto do descritivo]
 
   *CRONOLOGIA:*
-  • 10h00 - [Evento inicial]
-  • 10h05 - [Ação de atendimento]
-  • 10h12 - [Acionamento de apoio/SAMU]
+  • Em apuração inicial.
 
   #AAS/ASL: [Identificação]
   #CPS: [Identificação]
 
+  - NÃO invente ações, horários ou eventos na cronologia. Na geração inicial, use sempre "• Em apuração inicial." (a cronologia será atualizada manualmente pelo operador a cada nova ação, gerando uma nova mensagem).
   - Se ainda não houver cronologia detalhada, use: "• Em apuração inicial."
   - Se AAS/ASL ou CPS não forem informados, use "Não informado".
   - O horário deve usar o formato "HHhMM" (ex: 10h05), substituindo ":" por "h".

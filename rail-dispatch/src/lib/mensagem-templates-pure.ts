@@ -217,7 +217,7 @@ export function aplicarTemplateMensagem(template: string, dados: DadosTemplateMe
   if (dados.isEncerramento) {
     if (texto.includes('{{ENCERRAMENTO}}')) {
       texto = texto.replaceAll('{{ENCERRAMENTO}}', '*ENCERRAMENTO*');
-    } else if (!/\*ENCERRAMENTO\*/i.test(texto)) {
+    } else if (!/\*ENCERRAMENTO\s*:?\*/i.test(texto)) {
       const matchTitulo = texto.match(/^(\s*\*?(?:T[íi]tulo|Ocorr[êe]ncia):?[^\r\n]*)/im);
       if (matchTitulo && matchTitulo.index !== undefined) {
         const antes = texto.slice(0, matchTitulo.index);
@@ -405,6 +405,7 @@ export function aplicarEncerramentoNaMensagem(
     horaInicio: inicio,
     horaFim,
     duracao: calcularDuracao(inicio, horaFim),
+    isEncerramento: true,
     sco: assinatura,
     ...impactoOutraLinha,
   });

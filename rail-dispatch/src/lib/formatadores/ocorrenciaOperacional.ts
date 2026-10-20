@@ -13,6 +13,22 @@ export interface PayloadOcorrenciaOperacional {
   cronologia: ItemCronologia[];
   aasAsl?: string;
   cps?: string;
+  status?: 'em_andamento' | 'encerrada';
+}
+
+/**
+ * Lê um campo no formato `#ROTULO: valor` da mensagem operacional.
+ * Retorna vazio quando o campo não existe ou está como "Não informado".
+ */
+export function extrairCampoOperacional(mensagem: string, rotulo: string): string {
+  const prefixo = `#${rotulo.toLowerCase()}:`;
+  const linha = mensagem
+    .split('\n')
+    .find((item) => item.trim().replace(/^\*+/, '').toLowerCase().startsWith(prefixo));
+
+  if (!linha) return '';
+  const valor = linha.slice(linha.indexOf(':') + 1).trim().replace(/^\*+/, '').trim();
+  return /^n[ãa]o informado$/i.test(valor) ? '' : valor;
 }
 
 export function formatarMensagemOcorrencia(dados: PayloadOcorrenciaOperacional): string {
@@ -29,11 +45,13 @@ export function formatarMensagemOcorrencia(dados: PayloadOcorrenciaOperacional):
 
   const aasAslLinha = dados.aasAsl?.trim() ? `#AAS/ASL: ${dados.aasAsl.trim()}` : '#AAS/ASL: Não informado';
   const cpsLinha = dados.cps?.trim() ? `#CPS: ${dados.cps.trim()}` : '#CPS: Não informado';
+  const encerrada = dados.status === 'encerrada';
+  const statusLinha = encerrada ? '\n*STATUS:* Encerrada' : '';
 
   return `*LINHA:* ${dados.linha}
 *OCORRÊNCIA:* ${dados.tipoOcorrencia}
 *LOCAL:* ${dados.local}
-*HORÁRIO:* ${dados.horario.replace(':', 'h')}
+*HORÁRIO:* ${dados.horario.replace(':', 'h')}${statusLinha}
 *DESCRITIVO:* ${dados.descritivo || 'Sem descritivo preliminar.'}
 
 *CRONOLOGIA:*

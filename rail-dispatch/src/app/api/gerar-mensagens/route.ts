@@ -582,7 +582,7 @@ ${exemplosFewShot}`;
             },
             ocorrencias_operacionais: {
               type: Type.STRING,
-              description: 'Mensagem no modelo obrigatório de ocorrências operacionais com os campos *LINHA:* *OCORRÊNCIA:* *LOCAL:* *HORÁRIO:* *DESCRITIVO:* *CRONOLOGIA:* #AAS/ASL: #CPS:. Deve conter a cronologia formatada com horários e eventos, mesmo que inicialmente "Em apuração inicial".',
+              description: 'Mensagem no modelo obrigatório de ocorrências operacionais com os campos *LINHA:* *OCORRÊNCIA:* *LOCAL:* *HORÁRIO:* *DESCRITIVO:* *CRONOLOGIA:* #AAS/ASL: #CPS:. A cronologia inicial deve ser sempre "• Em apuração inicial." (não invente ações, horários ou eventos).',
             },
           },
           required: ['comunicacao', 'operacao', 'gerencia', 'ocorrencias_operacionais'],

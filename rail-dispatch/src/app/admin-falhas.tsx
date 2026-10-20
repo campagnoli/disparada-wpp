@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Download, FileSpreadsheet, FileText, LogOut, MapPin, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, Download, FileSpreadsheet, FileText, LogOut, MapPin, Plus, Send, Sparkles, TrainFront, Trash2, Upload } from 'lucide-react';
 import AdminPrompt from '@/app/admin-prompt';
 import AdminTemplates from '@/app/admin-templates';
 import AdminWhatsApp from '@/app/admin-whatsapp';
 import AdminEstacoes from '@/app/admin-estacoes';
+import AdminFrotaReporte from '@/app/admin-frota-reporte';
 
 export interface FalhaPredefinida {
   id: number;
@@ -20,6 +21,26 @@ interface AdminFalhasProps {
   onNotificarErro?: (erro: unknown, contexto?: string) => void;
   onNotificarSucesso?: (titulo: string, mensagem: string) => void;
 }
+
+type SecaoAdmin = 'falhas' | 'prompt' | 'templates' | 'whatsapp' | 'estacoes' | 'frota';
+
+const TITULOS_SECAO_ADMIN: Record<SecaoAdmin, string> = {
+  falhas: 'Opções predefinidas de falha',
+  prompt: 'Configuração do Prompt da IA',
+  templates: 'Modelos de Mensagem',
+  whatsapp: 'Conexão WhatsApp e Grupos',
+  estacoes: 'Estações e Malha',
+  frota: 'Frota e Reporte de Turno',
+};
+
+const DESCRICOES_SECAO_ADMIN: Record<SecaoAdmin, string> = {
+  falhas: 'As opções cadastradas ficam disponíveis para todos os operadores no despacho.',
+  prompt: 'Personalize o comportamento, regras e estilo de resposta do Google Gemini.',
+  templates: 'Gerencie os modelos das mensagens tradicionais, operacionais e de encerramento.',
+  whatsapp: 'Configure a Evolution API, a instância conectada e os grupos de envio.',
+  estacoes: 'Cadastre estações, vias e a malha ferroviária usada nas ocorrências.',
+  frota: 'Cadastre a frota nominal por linha e o modelo do Reporte de Turno.',
+};
 
 function parseCSV(text: string): { falhas: { descricao: string; impacto: string }[]; erros: string[] } {
   const lines: string[] = [];
@@ -163,7 +184,7 @@ export default function AdminFalhas({
   const [autenticado, setAutenticado] = useState(false);
   const [verificandoSessao, setVerificandoSessao] = useState(true);
   const [senha, setSenha] = useState('');
-  const [secaoAdmin, setSecaoAdmin] = useState<'falhas' | 'prompt' | 'templates' | 'whatsapp' | 'estacoes'>('falhas');
+  const [secaoAdmin, setSecaoAdmin] = useState<SecaoAdmin>('falhas');
   const [modoCadastro, setModoCadastro] = useState<'individual' | 'csv'>('individual');
   const [novaFalha, setNovaFalha] = useState('');
   const [novoImpacto, setNovoImpacto] = useState('');
@@ -419,12 +440,10 @@ export default function AdminFalhas({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-800">
-            {secaoAdmin === 'falhas' ? 'Opções predefinidas de falha' : 'Configuração do Prompt da IA'}
+            {TITULOS_SECAO_ADMIN[secaoAdmin]}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            {secaoAdmin === 'falhas'
-              ? 'As opções cadastradas ficam disponíveis para todos os operadores no despacho.'
-              : 'Personalize o comportamento, regras e estilo de resposta do Google Gemini.'}
+            {DESCRICOES_SECAO_ADMIN[secaoAdmin]}
           </p>
         </div>
         {autenticado && (
@@ -459,7 +478,7 @@ export default function AdminFalhas({
       ) : (
         <div className="space-y-6">
           {/* Menu de navegação entre as seções da administração */}
-          <div className="flex border-b border-slate-200 gap-2">
+          <div className="flex flex-wrap border-b border-slate-200 gap-2">
             <button
               type="button"
               onClick={() => setSecaoAdmin('falhas')}
@@ -506,7 +525,7 @@ export default function AdminFalhas({
               }`}
             >
               <Send className="h-4 w-4 text-green-600" />
-              Conexão WhatsApp & Grupos
+              Conexão WhatsApp e Grupos
             </button>
             <button
               type="button"
@@ -518,7 +537,19 @@ export default function AdminFalhas({
               }`}
             >
               <MapPin className="h-4 w-4 text-sky-600" />
-              Estações & Malha
+              Estações e Malha
+            </button>
+            <button
+              type="button"
+              onClick={() => setSecaoAdmin('frota')}
+              className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                secaoAdmin === 'frota'
+                  ? 'border-safira text-safira'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <TrainFront className="h-4 w-4 text-coral" />
+              Frota e Reporte
             </button>
           </div>
 
@@ -539,6 +570,11 @@ export default function AdminFalhas({
             />
           ) : secaoAdmin === 'estacoes' ? (
             <AdminEstacoes
+              onNotificarErro={onNotificarErro}
+              onNotificarSucesso={onNotificarSucesso}
+            />
+          ) : secaoAdmin === 'frota' ? (
+            <AdminFrotaReporte
               onNotificarErro={onNotificarErro}
               onNotificarSucesso={onNotificarSucesso}
             />

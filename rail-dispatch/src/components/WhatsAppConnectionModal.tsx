@@ -55,6 +55,7 @@ export default function WhatsAppConnectionModal() {
   const [groupsError, setGroupsError] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const [copiedGroupId, setCopiedGroupId] = useState<string | null>(null);
+  const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
 
   const connected = state === 'open';
 
@@ -93,7 +94,8 @@ export default function WhatsAppConnectionModal() {
       setGroupSearch('');
       setCopiedGroupId(null);
       try {
-        const response = await fetch('/api/whatsapp/groups', {
+        const url = groupsRefreshKey > 0 ? '/api/whatsapp/groups?refresh=1' : '/api/whatsapp/groups';
+        const response = await fetch(url, {
           cache: 'no-store',
           signal: controller.signal,
         });
@@ -129,7 +131,7 @@ export default function WhatsAppConnectionModal() {
 
     void loadGroups();
     return () => controller.abort();
-  }, [connected]);
+  }, [connected, groupsRefreshKey]);
 
   useEffect(() => {
     if (!copiedGroupId) return;
@@ -307,17 +309,29 @@ export default function WhatsAppConnectionModal() {
                 </p>
               </div>
             </div>
-            <label className="relative block w-full sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={groupSearch}
-                onChange={(event) => setGroupSearch(event.target.value)}
-                placeholder="Filtrar pelo nome do grupo"
-                aria-label="Filtrar grupos pelo nome"
-                className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-xs outline-none focus:border-safira focus:ring-2 focus:ring-safira/15"
-              />
-            </label>
+            <div className="flex w-full items-center gap-2 sm:max-w-md">
+              <label className="relative block w-full">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={groupSearch}
+                  onChange={(event) => setGroupSearch(event.target.value)}
+                  placeholder="Filtrar pelo nome do grupo"
+                  aria-label="Filtrar grupos pelo nome"
+                  className="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-xs outline-none focus:border-safira focus:ring-2 focus:ring-safira/15"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setGroupsRefreshKey((prev) => prev + 1)}
+                disabled={groupsLoading}
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-600 transition hover:border-safira hover:text-safira disabled:opacity-50"
+                title="Recarregar a lista de grupos"
+              >
+                <LoaderCircle className={`h-3.5 w-3.5 ${groupsLoading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
           </div>
 
           {groupsError && (
