@@ -12,7 +12,15 @@ function isRecord(valor: unknown): valor is Record<string, unknown> {
 }
 
 function extrairTemplate(valor: unknown): string | null {
-  if (typeof valor === 'string' && valor.trim()) return valor;
+  if (typeof valor === 'string' && valor.trim()) {
+    try {
+      const valorDecodificado: unknown = JSON.parse(valor);
+      if (isRecord(valorDecodificado) && typeof valorDecodificado.template === 'string' && valorDecodificado.template.trim()) {
+        return valorDecodificado.template;
+      }
+    } catch {}
+    return valor;
+  }
   if (isRecord(valor) && typeof valor.template === 'string' && valor.template.trim()) {
     return valor.template;
   }
